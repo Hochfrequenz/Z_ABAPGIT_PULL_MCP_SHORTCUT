@@ -23,24 +23,12 @@ The abapGit UI is a complex multi-step web application. Automating it via browse
 
 ### Architecture
 
-```
-MCP Agent (Claude Code, etc.)
-    |
-    |  calls MCP tool (sap_abapgit_pull / sap_abapgit_list_repos)
-    v
-MCP Server (sapwebgui.mcp)
-    |
-    |  enters transaction via OK-Code field:
-    |    /nZ_ABAPGIT_PULL_MCP P_REPO=...; P_TRKORR=...; ...
-    |  presses F8 (Execute)
-    |  reads status bar or screen output
-    v
-SAP Web GUI / SAP GUI
-    |
-    |  runs report Z_ABAPGIT_PULL_MCP_SHORTCUT
-    |  which calls the abapGit ABAP API directly
-    v
-abapGit API (zcl_abapgit_repo_srv, zcl_abapgit_repo_online)
+```mermaid
+flowchart TD
+    A["MCP Agent\n(Claude Code, etc.)"] -->|"calls MCP tool\n(sap_abapgit_pull / sap_abapgit_list_repos)"| B
+    B["MCP Server\n(sapwebgui.mcp)"] -->|"enters transaction via OK-Code field:\n/nZ_ABAPGIT_PULL_MCP P_REPO=…; P_TRKORR=…;\npresses F8 · reads status bar"| C
+    C["SAP Web GUI / SAP GUI"] -->|"runs report Z_ABAPGIT_PULL_MCP_SHORTCUT\ncalls the abapGit ABAP API directly"| D
+    D["abapGit API\n(zcl_abapgit_repo_srv, zcl_abapgit_repo_online)"]
 ```
 
 ### Interaction via SAP WebGUI (browser automation)
@@ -140,3 +128,7 @@ The MCP server parses this output from the rendered HTML (WebGUI) or the GUI con
 ## Used by
 
 - [sapwebgui.mcp](https://github.com/Hochfrequenz/sapwebgui.mcp) -- MCP server for SAP GUI automation via Claude Code and other AI agents
+
+## Related
+
+- [AIBAP_TEMPLATE_REPOSITORY](https://github.com/Hochfrequenz/AIBAP_TEMPLATE_REPOSITORY) -- Describes the full vibe coding ABAP workflow: how to set up an ABAP repository for AI-assisted development using abapGit, MCP tools, and Claude Code end to end
