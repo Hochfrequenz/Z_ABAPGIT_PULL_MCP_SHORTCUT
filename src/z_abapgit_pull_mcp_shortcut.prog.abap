@@ -131,7 +131,7 @@ START-OF-SELECTION.
         DATA(lt_msgs) = lo_log->get_messages( ).
         IF lines( lt_msgs ) > 0.
           DATA(lv_msg) = lt_msgs[ 1 ]-text.
-          MESSAGE e398(00) WITH 'Pull log:' lv_msg(50) lv_msg+50(50) ''.
+          MESSAGE e398(00) WITH 'Pull log:' lv_msg '' ''.
         ELSE.
           MESSAGE e398(00) WITH 'Pull failed: deserialization log has issues' '' '' ''.
         ENDIF.
