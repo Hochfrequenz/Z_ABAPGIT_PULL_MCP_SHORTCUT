@@ -29,12 +29,47 @@ AT SELECTION-SCREEN.
     MESSAGE e398(00) WITH 'Invalid P_ACTION:' p_action '. Use PULL or LIST.' ''.
   ENDIF.
 
+CLASS lcl_util DEFINITION.
+  PUBLIC SECTION.
+    " Uppercase, and drop a trailing slash and a .git suffix, so the same
+    " repository written three legitimate ways still matches. abapGit
+    " itself compares URLs case-insensitively rather than literally.
+    CLASS-METHODS normalise
+      IMPORTING iv_url        TYPE string
+      RETURNING VALUE(rv_url) TYPE string.
+ENDCLASS.
+
+CLASS lcl_util IMPLEMENTATION.
+  METHOD normalise.
+    rv_url = to_upper( iv_url ).
+    IF rv_url CP '*/'.
+      rv_url = substring( val = rv_url len = strlen( rv_url ) - 1 ).
+    ENDIF.
+    IF rv_url CP '*.GIT'.
+      rv_url = substring( val = rv_url len = strlen( rv_url ) - 4 ).
+    ENDIF.
+  ENDMETHOD.
+ENDCLASS.
+
 START-OF-SELECTION.
 
 * --- LIST mode: output all registered repos as tilde-delimited lines ---
   IF p_action = 'LIST'.
     TRY.
-        LOOP AT zcl_abapgit_repo_srv=>get_instance( )->list( ) INTO DATA(li_repo_list).
+        " The count goes FIRST, deliberately. The consumer reads only
+        " the first page of this classic list, so a trailing total lands
+        " on the page it never sees - which is exactly the case it would
+        " be there to detect. As a header it is always visible, and the
+        " consumer can compare it against the number of rows it parsed.
+        "
+        " NB: this line has two fields where every other line has seven.
+        " It is a breaking change for any consumer that splits blindly,
+        " so it must not be deployed ahead of the reader that tolerates
+        " it.
+        DATA(lt_repos) = zcl_abapgit_repo_srv=>get_instance( )->list( ).
+        WRITE: / |TOTAL~{ lines( lt_repos ) }|.
+
+        LOOP AT lt_repos INTO DATA(li_repo_list).
           DATA(lv_offline) = li_repo_list->is_offline( ).
           DATA(lv_offline_flag) = COND string( WHEN lv_offline = abap_true THEN 'X' ELSE '' ).
           DATA(lv_url) = COND string( WHEN lv_offline = abap_false
@@ -52,6 +87,7 @@ START-OF-SELECTION.
                           lv_offline_flag.
           WRITE: / lv_line.
         ENDLOOP.
+
       CATCH cx_root INTO DATA(lx_list_error).
         MESSAGE e398(00) WITH lx_list_error->get_text( ) '' '' ''.
     ENDTRY.
@@ -67,17 +103,44 @@ START-OF-SELECTION.
   TRY.
       DATA lo_repo TYPE REF TO zcl_abapgit_repo_online.
 
+      " Match EXACTLY, on name or normalised URL, and refuse to guess.
+      "
+      " This was `IF li_repo->get_name( ) CS p_repo` with an EXIT on the
+      " first hit. CS is a substring test AND ignores case, so a P_REPO
+      " that was not unique silently bound an arbitrary repository - and
+      " since this report auto-confirms every overwrite decision below
+      " (it must, to run unattended), that meant deserializing over an
+      " unrelated package and reporting success.
+      DATA lt_hits TYPE STANDARD TABLE OF REF TO zcl_abapgit_repo_online WITH EMPTY KEY.
+
+      DATA(lv_want) = lcl_util=>normalise( p_repo ).
+
       LOOP AT zcl_abapgit_repo_srv=>get_instance( )->list( iv_offline = abap_false ) INTO DATA(li_repo).
-        IF li_repo->get_name( ) CS p_repo.
-          lo_repo ?= li_repo.
-          EXIT.
+        DATA(lo_online) = CAST zcl_abapgit_repo_online( li_repo ).
+        " URL as well as name: a URL is genuinely unique, whereas
+        " get_name( ) falls back to a URL-derived value when the stored
+        " name is blank. Normalised on both sides because registered
+        " URLs differ in case, a trailing slash and a .git suffix.
+        IF li_repo->get_name( ) = p_repo
+           OR lcl_util=>normalise( lo_online->get_url( ) ) = lv_want.
+          APPEND lo_online TO lt_hits.
         ENDIF.
       ENDLOOP.
 
-      IF lo_repo IS NOT BOUND.
-        MESSAGE e398(00) WITH 'Repository not found:' p_repo '' ''.
+      IF lines( lt_hits ) = 0.
+        MESSAGE e398(00) WITH 'Repository not found:' p_repo
+                              '(exact name or URL; online repos only)' ''.
         RETURN.
       ENDIF.
+
+      IF lines( lt_hits ) > 1.
+        " Cannot happen for a URL, but two repos may share a name.
+        DATA(lv_hits) = |{ lines( lt_hits ) }|.
+        MESSAGE e398(00) WITH 'P_REPO is ambiguous:' p_repo 'matches' lv_hits.
+        RETURN.
+      ENDIF.
+
+      lo_repo = lt_hits[ 1 ].
 
       IF p_user IS NOT INITIAL AND p_token IS NOT INITIAL.
         zcl_abapgit_login_manager=>set(
