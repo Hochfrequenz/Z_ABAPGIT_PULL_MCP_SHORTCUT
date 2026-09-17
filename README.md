@@ -70,7 +70,7 @@ Pulls (deserializes) a Git repository into SAP via the abapGit API.
 | Parameter  | Required | Description                                      |
 | ---------- | -------- | ------------------------------------------------ |
 | `P_ACTION` | No       | `PULL` (default)                                  |
-| `P_REPO`   | Yes      | Repository name as registered in abapGit          |
+| `P_REPO`   | Yes      | Exact repository name or URL (case-insensitive)   |
 | `P_TRKORR` | If req.  | Transport request (required if system enforces it) |
 | `P_USER`   | No       | GitHub username (for private repos)                |
 | `P_TOKEN`  | No       | GitHub PAT (for private repos)                     |
@@ -86,16 +86,27 @@ Pulls (deserializes) a Git repository into SAP via the abapGit API.
 7. Checks the deserialization log for errors
 8. Reports success or error via `MESSAGE`
 
-`P_REPO` matches **exactly** — on the repository name, or on its URL with case,
-a trailing slash and a `.git` suffix normalised away. It is not a substring
-match, and it deliberately refuses to guess: if `P_REPO` matches more than one
-registered repository the report stops with
+`P_REPO` matches **exactly** — on the repository name, or on its URL. **Both
+comparisons ignore case**, so there is no need to upper-case the input; the URL
+comparison additionally normalises away a trailing slash and a `.git` suffix,
+which the name comparison does not, because those characters are meaningful in a
+name. It is not a substring match, and it deliberately refuses to guess: if
+`P_REPO` matches more than one registered repository the report stops with
 
 ```
 P_REPO is ambiguous: <value> matches <n>
 ```
 
-rather than picking one. That matters because step 5 below auto-confirms every
+rather than picking one. If it matches none:
+
+```
+Repository not found: <value> (exact name/URL, online only)
+```
+
+A consumer should tell those two apart — the first means "say which one", the
+second means "check the name". Note PULL searches **online repositories only**,
+so an offline repository reports "not found" rather than a more specific
+message. That matters because step 5 below auto-confirms every
 overwrite decision, so binding the wrong repository would silently deserialize
 over an unrelated package and report success. A consumer should surface this
 message as its own distinct failure, not as a generic error.

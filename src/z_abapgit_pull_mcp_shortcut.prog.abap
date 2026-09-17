@@ -142,20 +142,24 @@ START-OF-SELECTION.
         " regression for every caller passing a differently-cased name,
         " and exactness is orthogonal to case now that an ambiguous
         " P_REPO is an explicit error.
-        IF to_upper( li_repo->get_name( ) ) = lv_want_name
+        IF to_upper( lo_online->get_name( ) ) = lv_want_name
            OR lcl_util=>normalise( lo_online->get_url( ) ) = lv_want.
           APPEND lo_online TO lt_hits.
         ENDIF.
       ENDLOOP.
 
       IF lines( lt_hits ) = 0.
+        " Kept short on purpose: the status bar cuts at about 73
+        " characters, and this is what the MCP consumer reads.
         MESSAGE e398(00) WITH 'Repository not found:' p_repo
-                              '(exact name or URL; online repos only)' ''.
+                              '(exact name/URL, online only)' ''.
         RETURN.
       ENDIF.
 
       IF lines( lt_hits ) > 1.
-        " Cannot happen for a URL, but two repos may share a name.
+        " Two repos may share a name, and abapGit permits the same
+        " URL to be registered twice against different packages - so
+        " neither comparand is guaranteed unique on its own.
         DATA(lv_hits) = |{ lines( lt_hits ) }|.
         MESSAGE e398(00) WITH 'P_REPO is ambiguous:' p_repo 'matches' lv_hits.
         RETURN.
