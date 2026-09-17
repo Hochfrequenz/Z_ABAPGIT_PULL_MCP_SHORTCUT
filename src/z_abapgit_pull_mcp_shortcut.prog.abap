@@ -62,12 +62,13 @@ START-OF-SELECTION.
         " be there to detect. As a header it is always visible, and the
         " consumer can compare it against the number of rows it parsed.
         "
-        " NB: this line has two fields where every other line has seven.
-        " It is a breaking change for any consumer that splits blindly,
-        " so it must not be deployed ahead of the reader that tolerates
-        " it.
+        " Padded to seven fields so it is NOT a breaking change: a
+        " consumer that splits every line into seven still gets seven,
+        " and one that looks for a header still finds TOTAL in field 1.
+        " The five trailing tildes are cheaper than a deployment order
+        " constraint between this report and its reader.
         DATA(lt_repos) = zcl_abapgit_repo_srv=>get_instance( )->list( ).
-        WRITE: / |TOTAL~{ lines( lt_repos ) }|.
+        WRITE: / |TOTAL~{ lines( lt_repos ) }~~~~~|.
 
         LOOP AT lt_repos INTO DATA(li_repo_list).
           DATA(lv_offline) = li_repo_list->is_offline( ).
@@ -113,15 +114,35 @@ START-OF-SELECTION.
       " unrelated package and reporting success.
       DATA lt_hits TYPE STANDARD TABLE OF REF TO zcl_abapgit_repo_online WITH EMPTY KEY.
 
-      DATA(lv_want) = lcl_util=>normalise( p_repo ).
+      DATA lo_online TYPE REF TO zcl_abapgit_repo_online.
+
+      " Two different comparands on purpose. The URL is normalised (a
+      " trailing slash and a .git suffix are noise there); the name is
+      " only uppercased, because for a NAME those characters are real.
+      DATA(lv_want)      = lcl_util=>normalise( p_repo ).
+      DATA(lv_want_name) = to_upper( p_repo ).
 
       LOOP AT zcl_abapgit_repo_srv=>get_instance( )->list( iv_offline = abap_false ) INTO DATA(li_repo).
-        DATA(lo_online) = CAST zcl_abapgit_repo_online( li_repo ).
+        " Defensive: list( iv_offline = abap_false ) should yield only
+        " online repos, but this code is the last thing between the
+        " caller and an auto-confirmed overwrite, so it does not assume.
+        " An unguarded CAST here would abort the whole search on one bad
+        " entry and make a matchable repo later in the list unreachable.
+        CLEAR lo_online.
+        TRY.
+            lo_online ?= li_repo.
+          CATCH cx_sy_move_cast_error.
+            CONTINUE.
+        ENDTRY.
+
         " URL as well as name: a URL is genuinely unique, whereas
         " get_name( ) falls back to a URL-derived value when the stored
-        " name is blank. Normalised on both sides because registered
-        " URLs differ in case, a trailing slash and a .git suffix.
-        IF li_repo->get_name( ) = p_repo
+        " name is blank. Case-insensitive on both, because the old CS
+        " match was too - dropping that would be an unannounced
+        " regression for every caller passing a differently-cased name,
+        " and exactness is orthogonal to case now that an ambiguous
+        " P_REPO is an explicit error.
+        IF to_upper( li_repo->get_name( ) ) = lv_want_name
            OR lcl_util=>normalise( lo_online->get_url( ) ) = lv_want.
           APPEND lo_online TO lt_hits.
         ENDIF.

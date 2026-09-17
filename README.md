@@ -77,7 +77,7 @@ Pulls (deserializes) a Git repository into SAP via the abapGit API.
 
 **What it does:**
 
-1. Finds the repository by name in abapGit's registry
+1. Finds the repository by an **exact** match on its name or its URL
 2. Sets GitHub credentials if provided (for private repo authentication)
 3. Runs `deserialize_checks()` to get required confirmations
 4. Verifies the user has a modifiable task in the given transport
@@ -85,6 +85,24 @@ Pulls (deserializes) a Git repository into SAP via the abapGit API.
 6. Calls `lo_repo->deserialize()` to pull
 7. Checks the deserialization log for errors
 8. Reports success or error via `MESSAGE`
+
+`P_REPO` matches **exactly** — on the repository name, or on its URL with case,
+a trailing slash and a `.git` suffix normalised away. It is not a substring
+match, and it deliberately refuses to guess: if `P_REPO` matches more than one
+registered repository the report stops with
+
+```
+P_REPO is ambiguous: <value> matches <n>
+```
+
+rather than picking one. That matters because step 5 below auto-confirms every
+overwrite decision, so binding the wrong repository would silently deserialize
+over an unrelated package and report success. A consumer should surface this
+message as its own distinct failure, not as a generic error.
+
+Matching the URL as well as the name is worth having because `get_name( )`
+falls back to a URL-derived value whenever the stored name is blank, which it
+commonly is.
 
 **Example OK-Code:**
 ```
@@ -101,12 +119,31 @@ Lists all registered abapGit repositories with metadata.
 | ---------- | -------- | -------------- |
 | `P_ACTION` | Yes      | Must be `LIST` |
 
-**Output format:** Tilde-delimited lines via `WRITE`, one per repository:
+**Output format:** Tilde-delimited lines via `WRITE`. The **first** line is a
+header carrying the repository count; every following line is one repository:
 ```
+TOTAL~53~~~~~
 REPO_NAME~https://github.com/org/repo~$PACKAGE~refs/heads/main~20260225120000.0000000~DEVELOPER~
 ```
 
 Fields: `name~url~package~branch~last_pull_at~last_pull_by~offline_flag`
+
+The header is padded to the same seven fields, so a consumer that splits every
+line blindly is unaffected; one that wants the count reads field 2 of the line
+whose field 1 is `TOTAL`.
+
+**Compare the header against the number of rows you actually parsed.** This is
+a classic SAP list and it is paged: a consumer that reads only the visible page
+gets a short answer with no indication that it is partial, and the visible page
+is as tall as the SAP GUI window rather than a fixed number of rows. That is
+why the count is a header and not a trailer — a trailing total lands on the
+page such a consumer never reads, which is precisely the case it would exist to
+detect. Lines are also cut at the window width, so read the full line width or
+long rows come back with truncated trailing fields rather than missing ones.
+
+If listing itself fails the report raises `MESSAGE e398` and writes no lines at
+all, header included — so "no `TOTAL` line" means an error, not zero
+repositories. Read the status bar in that case.
 
 The tilde (`~`) delimiter is used because SAP WebGUI strips pipe (`|`) characters from `WRITE` output.
 
