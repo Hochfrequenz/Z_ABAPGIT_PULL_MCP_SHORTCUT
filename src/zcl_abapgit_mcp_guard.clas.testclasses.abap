@@ -322,6 +322,7 @@ CLASS ltcl_transport_rule DEFINITION FINAL FOR TESTING
 
     METHODS workbench_needs_transport     FOR TESTING.
     METHODS workbench_gets_transport      FOR TESTING RAISING zcx_abapgit_mcp_sync.
+    METHODS customizing_preset_only       FOR TESTING RAISING zcx_abapgit_mcp_sync.
     METHODS customizing_preset_is_kept    FOR TESTING RAISING zcx_abapgit_mcp_sync.
     METHODS mixed_without_preset_refused  FOR TESTING.
     METHODS customizing_only_uses_request FOR TESTING RAISING zcx_abapgit_mcp_sync.
@@ -360,6 +361,18 @@ CLASS ltcl_transport_rule IMPLEMENTATION.
       act = zcl_abapgit_mcp_guard=>assign_transports( iv_transport            = to_lower( c_workbench )
                                                       iv_workbench_required   = abap_true
                                                       iv_customizing_required = abap_false ) ).
+  ENDMETHOD.
+
+
+  METHOD customizing_preset_only.
+    " Table content only, request preset in the repository: a "transport" passed
+    " anyway is not needed and must not be checked as a workbench request
+    cl_abap_unit_assert=>assert_equals(
+      exp = VALUE zcl_abapgit_mcp_guard=>ty_transports( customizing = c_customizing )
+      act = zcl_abapgit_mcp_guard=>assign_transports( iv_transport            = c_workbench
+                                                      iv_workbench_required   = abap_false
+                                                      iv_customizing_required = abap_true
+                                                      iv_customizing_preset   = c_customizing ) ).
   ENDMETHOD.
 
 

@@ -162,6 +162,10 @@ CLASS ZCL_ABAPGIT_MCP_GUARD IMPLEMENTATION.
 
     rs_transports-customizing = to_upper( condense( iv_customizing_preset ) ).
     IF rs_transports-customizing IS NOT INITIAL.
+      IF iv_workbench_required = abap_false.
+        " The preset serves the customizing part; an unneeded "transport" is not checked
+        CLEAR rs_transports-workbench.
+      ENDIF.
       RETURN.
     ENDIF.
 
