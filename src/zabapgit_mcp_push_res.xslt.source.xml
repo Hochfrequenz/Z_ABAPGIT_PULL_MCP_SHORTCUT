@@ -6,7 +6,7 @@
   <tt:template>
     <object>
       <str name="status"><tt:value ref=".RESULT.STATUS"/></str>
-      <tt:cond check="not-initial(.RESULT.COMMIT)">
+      <tt:cond s-check="not-initial(RESULT.COMMIT)">
         <str name="commit"><tt:value ref=".RESULT.COMMIT"/></str>
       </tt:cond>
       <object name="author">
