@@ -1,0 +1,2 @@
+# abapGit requires CRLF line endings in transformation sources; keep them byte for byte
+*.xslt.source.xml -text
