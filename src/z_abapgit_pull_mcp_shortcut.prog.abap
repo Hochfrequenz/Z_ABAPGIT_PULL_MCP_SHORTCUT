@@ -29,28 +29,6 @@ AT SELECTION-SCREEN.
     MESSAGE e398(00) WITH 'Invalid P_ACTION:' p_action '. Use PULL or LIST.' ''.
   ENDIF.
 
-CLASS lcl_util DEFINITION.
-  PUBLIC SECTION.
-    " Uppercase, and drop a trailing slash and a .git suffix, so the same
-    " repository written three legitimate ways still matches. abapGit
-    " itself compares URLs case-insensitively rather than literally.
-    CLASS-METHODS normalise
-      IMPORTING iv_url        TYPE string
-      RETURNING VALUE(rv_url) TYPE string.
-ENDCLASS.
-
-CLASS lcl_util IMPLEMENTATION.
-  METHOD normalise.
-    rv_url = to_upper( iv_url ).
-    IF rv_url CP '*/'.
-      rv_url = substring( val = rv_url len = strlen( rv_url ) - 1 ).
-    ENDIF.
-    IF rv_url CP '*.GIT'.
-      rv_url = substring( val = rv_url len = strlen( rv_url ) - 4 ).
-    ENDIF.
-  ENDMETHOD.
-ENDCLASS.
-
 START-OF-SELECTION.
 
 * --- LIST mode: output all registered repos as tilde-delimited lines ---
@@ -112,41 +90,12 @@ START-OF-SELECTION.
       " since this report auto-confirms every overwrite decision below
       " (it must, to run unattended), that meant deserializing over an
       " unrelated package and reporting success.
-      DATA lt_hits TYPE STANDARD TABLE OF REF TO zcl_abapgit_repo_online WITH EMPTY KEY.
-
-      DATA lo_online TYPE REF TO zcl_abapgit_repo_online.
-
-      " Two different comparands on purpose. The URL is normalised (a
-      " trailing slash and a .git suffix are noise there); the name is
-      " only uppercased, because for a NAME those characters are real.
-      DATA(lv_want)      = lcl_util=>normalise( p_repo ).
-      DATA(lv_want_name) = to_upper( p_repo ).
-
-      LOOP AT zcl_abapgit_repo_srv=>get_instance( )->list( iv_offline = abap_false ) INTO DATA(li_repo).
-        " Defensive: list( iv_offline = abap_false ) should yield only
-        " online repos, but this code is the last thing between the
-        " caller and an auto-confirmed overwrite, so it does not assume.
-        " An unguarded CAST here would abort the whole search on one bad
-        " entry and make a matchable repo later in the list unreachable.
-        CLEAR lo_online.
-        TRY.
-            lo_online ?= li_repo.
-          CATCH cx_sy_move_cast_error.
-            CONTINUE.
-        ENDTRY.
-
-        " URL as well as name: a URL is genuinely unique, whereas
-        " get_name( ) falls back to a URL-derived value when the stored
-        " name is blank. Case-insensitive on both, because the old CS
-        " match was too - dropping that would be an unannounced
-        " regression for every caller passing a differently-cased name,
-        " and exactness is orthogonal to case now that an ambiguous
-        " P_REPO is an explicit error.
-        IF to_upper( lo_online->get_name( ) ) = lv_want_name
-           OR lcl_util=>normalise( lo_online->get_url( ) ) = lv_want.
-          APPEND lo_online TO lt_hits.
-        ENDIF.
-      ENDLOOP.
+      "
+      " The matching lives in ZCL_ABAPGIT_MCP_REPO_MATCH, so that this report and
+      " the ADT endpoints under /sap/bc/adt/abapgitsync/ resolve a
+      " repository the same way: name (case-insensitive) or URL without a
+      " trailing slash and .git suffix, online repositories only.
+      DATA(lt_hits) = zcl_abapgit_mcp_repo_match=>find_online_repos( p_repo ).
 
       IF lines( lt_hits ) = 0.
         " Kept short on purpose: the status bar cuts at about 73

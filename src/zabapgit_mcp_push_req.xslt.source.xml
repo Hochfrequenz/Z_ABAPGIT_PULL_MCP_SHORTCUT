@@ -1,0 +1,38 @@
+<?sap.transform simple?>
+<tt:transform xmlns:tt="http://www.sap.com/transformation-templates">
+
+  <tt:root name="REQUEST"/>
+
+  <tt:template>
+    <object>
+      <tt:group>
+        <tt:cond frq="?">
+          <str name="repo"><tt:value ref=".REQUEST.REPO"/></str>
+        </tt:cond>
+        <tt:cond frq="?">
+          <array name="objects">
+            <tt:loop ref=".REQUEST.OBJECTS">
+              <object>
+                <tt:group>
+                  <tt:cond frq="?">
+                    <str name="obj_type"><tt:value ref="OBJ_TYPE"/></str>
+                  </tt:cond>
+                  <tt:cond frq="?">
+                    <str name="obj_name"><tt:value ref="OBJ_NAME"/></str>
+                  </tt:cond>
+                </tt:group>
+              </object>
+            </tt:loop>
+          </array>
+        </tt:cond>
+        <tt:cond frq="?">
+          <str name="message"><tt:value ref=".REQUEST.MESSAGE"/></str>
+        </tt:cond>
+        <tt:cond frq="?">
+          <bool name="dry_run"><tt:value ref=".REQUEST.DRY_RUN" map="val(C('X'))=xml('true'),val(C(' '))=xml('false')"/></bool>
+        </tt:cond>
+      </tt:group>
+    </object>
+  </tt:template>
+
+</tt:transform>

@@ -1,0 +1,46 @@
+<?sap.transform simple?>
+<tt:transform xmlns:tt="http://www.sap.com/transformation-templates">
+
+  <tt:root name="RESULT"/>
+
+  <tt:template>
+    <object>
+      <str name="status"><tt:value ref=".RESULT.STATUS"/></str>
+      <object name="repo">
+        <str name="name"><tt:value ref=".RESULT.REPO.NAME"/></str>
+        <str name="url"><tt:value ref=".RESULT.REPO.URL"/></str>
+        <str name="package"><tt:value ref=".RESULT.REPO.PACKAGE"/></str>
+      </object>
+      <array name="confirmations_required">
+        <tt:loop ref=".RESULT.CONFIRMATIONS_REQUIRED">
+          <object>
+            <str name="obj_type"><tt:value ref="OBJ_TYPE"/></str>
+            <str name="obj_name"><tt:value ref="OBJ_NAME"/></str>
+            <str name="action"><tt:value ref="ACTION"/></str>
+            <str name="text"><tt:value ref="TEXT"/></str>
+            <array name="files">
+              <tt:loop ref="FILES">
+                <object>
+                  <str name="path"><tt:value ref="PATH"/></str>
+                  <str name="filename"><tt:value ref="FILENAME"/></str>
+                  <str name="state"><tt:value ref="STATE"/></str>
+                </object>
+              </tt:loop>
+            </array>
+          </object>
+        </tt:loop>
+      </array>
+      <array name="log">
+        <tt:loop ref=".RESULT.LOG">
+          <object>
+            <str name="type"><tt:value ref="TYPE"/></str>
+            <str name="text"><tt:value ref="TEXT"/></str>
+            <str name="obj_type"><tt:value ref="OBJ_TYPE"/></str>
+            <str name="obj_name"><tt:value ref="OBJ_NAME"/></str>
+          </object>
+        </tt:loop>
+      </array>
+    </object>
+  </tt:template>
+
+</tt:transform>
