@@ -1,0 +1,25 @@
+<?sap.transform simple?>
+<tt:transform xmlns:tt="http://www.sap.com/transformation-templates">
+
+  <tt:root name="REPOS"/>
+
+  <tt:template>
+    <object>
+      <array name="repos">
+        <tt:loop ref=".REPOS">
+          <object>
+            <str name="key"><tt:value ref="KEY"/></str>
+            <str name="name"><tt:value ref="NAME"/></str>
+            <str name="url"><tt:value ref="URL"/></str>
+            <str name="package"><tt:value ref="PACKAGE"/></str>
+            <str name="branch"><tt:value ref="BRANCH"/></str>
+            <bool name="offline"><tt:value ref="OFFLINE" map="val(C('X'))=xml('true'),val(C(' '))=xml('false')"/></bool>
+            <str name="deserialized_at"><tt:value ref="DESERIALIZED_AT"/></str>
+            <str name="deserialized_by"><tt:value ref="DESERIALIZED_BY"/></str>
+          </object>
+        </tt:loop>
+      </array>
+    </object>
+  </tt:template>
+
+</tt:transform>

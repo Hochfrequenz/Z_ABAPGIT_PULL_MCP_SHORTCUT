@@ -1,0 +1,18 @@
+<?sap.transform simple?>
+<tt:transform xmlns:tt="http://www.sap.com/transformation-templates">
+
+  <tt:root name="ERROR"/>
+
+  <tt:template>
+    <object>
+      <str name="code"><tt:value ref=".ERROR.CODE"/></str>
+      <str name="message"><tt:value ref=".ERROR.MESSAGE"/></str>
+      <array name="details">
+        <tt:loop ref=".ERROR.DETAILS">
+          <str><tt:value/></str>
+        </tt:loop>
+      </array>
+    </object>
+  </tt:template>
+
+</tt:transform>
