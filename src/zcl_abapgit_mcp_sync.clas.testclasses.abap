@@ -9,6 +9,8 @@ CLASS ltcl_sync DEFINITION FINAL FOR TESTING
     METHODS unknown_repo_is_not_found  FOR TESTING.
     METHODS empty_object_name_is_bad   FOR TESTING.
     METHODS empty_confirm_action_is_bad FOR TESTING.
+    METHODS stage_param_per_version    FOR TESTING.
+    METHODS stage_param_installed      FOR TESTING.
 
     METHODS assert_code
       IMPORTING
@@ -93,6 +95,38 @@ CLASS ltcl_sync IMPLEMENTATION.
       CATCH zcx_abapgit_mcp_sync INTO lx_error.
     ENDTRY.
     assert_code( ix_error = lx_error iv_code = zif_abapgit_mcp_sync=>c_error-bad_request ).
+  ENDMETHOD.
+
+
+  METHOD stage_param_per_version.
+    " abapGit 1.128.0 to 1.131.0
+    cl_abap_unit_assert=>assert_equals(
+      exp = CONV abap_parmname( 'IO_REPO' )
+      act = zcl_abapgit_mcp_sync=>stage_repo_parameter(
+              VALUE #( ( name = 'IO_REPO'       parm_kind = cl_abap_objectdescr=>importing )
+                       ( name = 'II_OBJ_FILTER' parm_kind = cl_abap_objectdescr=>importing )
+                       ( name = 'RS_FILES'      parm_kind = cl_abap_objectdescr=>returning ) ) ) ).
+    " abapGit 1.132.0 and later
+    cl_abap_unit_assert=>assert_equals(
+      exp = CONV abap_parmname( 'II_REPO_ONLINE' )
+      act = zcl_abapgit_mcp_sync=>stage_repo_parameter(
+              VALUE #( ( name = 'II_REPO_ONLINE' parm_kind = cl_abap_objectdescr=>importing )
+                       ( name = 'II_OBJ_FILTER'  parm_kind = cl_abap_objectdescr=>importing )
+                       ( name = 'RS_FILES'       parm_kind = cl_abap_objectdescr=>returning ) ) ) ).
+    " Unknown signature: no guess
+    cl_abap_unit_assert=>assert_initial(
+      zcl_abapgit_mcp_sync=>stage_repo_parameter(
+        VALUE #( ( name = 'II_OBJ_FILTER' parm_kind = cl_abap_objectdescr=>importing )
+                 ( name = 'RS_FILES'      parm_kind = cl_abap_objectdescr=>returning ) ) ) ).
+  ENDMETHOD.
+
+
+  METHOD stage_param_installed.
+    " The abapGit version installed on this system must be one the push supports
+    DATA(lo_intf) = CAST cl_abap_intfdescr( cl_abap_typedescr=>describe_by_name( 'ZIF_ABAPGIT_STAGE_LOGIC' ) ).
+    cl_abap_unit_assert=>assert_not_initial(
+      act = zcl_abapgit_mcp_sync=>stage_repo_parameter( lo_intf->methods[ name = 'GET' ]-parameters )
+      msg = `ZIF_ABAPGIT_STAGE_LOGIC~GET has no known repository parameter` ).
   ENDMETHOD.
 
 ENDCLASS.

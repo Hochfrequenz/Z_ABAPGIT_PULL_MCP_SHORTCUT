@@ -1,6 +1,7 @@
 "! <p class="shorttext synchronized">abapGit sync: list, pull and push without SAP GUI</p>
-"! Logic behind the ADT endpoints under /sap/bc/adt/abapgitsync/ and the
-"! exact repository matching used by the report Z_ABAPGIT_PULL_MCP_SHORTCUT.
+"! Logic behind the ADT endpoints under /sap/bc/adt/abapgitsync/. The exact
+"! repository matching it shares with the report Z_ABAPGIT_PULL_MCP_SHORTCUT
+"! lives in ZCL_ABAPGIT_MCP_REPO_MATCH.
 "! The contract is the design spec on Hochfrequenz/aibap.mcp#135.
 CLASS zcl_abapgit_mcp_sync DEFINITION
   PUBLIC
@@ -43,6 +44,15 @@ CLASS zcl_abapgit_mcp_sync DEFINITION
       RETURNING
         VALUE(rv_text) TYPE string.
 
+    "! Name of the repository parameter of ZIF_ABAPGIT_STAGE_LOGIC~GET: IO_REPO
+    "! up to abapGit 1.131.0, II_REPO_ONLINE from 1.132.0 on; empty if neither
+    "! @parameter it_parameters | parameters of the method GET
+    CLASS-METHODS stage_repo_parameter
+      IMPORTING
+        it_parameters  TYPE abap_parmdescr_tab
+      RETURNING
+        VALUE(rv_name) TYPE abap_parmname.
+
   PRIVATE SECTION.
 
     TYPES ty_tadir_tt TYPE zif_abapgit_definitions=>ty_tadir_tt.
@@ -62,6 +72,19 @@ CLASS zcl_abapgit_mcp_sync DEFINITION
         iv_transport TYPE string
       CHANGING
         cs_checks    TYPE zif_abapgit_definitions=>ty_deserialize_checks
+      RAISING
+        zcx_abapgit_mcp_sync.
+
+    METHODS check_modifiable_task
+      IMPORTING
+        iv_request TYPE trkorr
+      RAISING
+        zcx_abapgit_mcp_sync.
+
+    METHODS check_request_type
+      IMPORTING
+        iv_request TYPE trkorr
+        iv_type    TYPE trfunction
       RAISING
         zcx_abapgit_mcp_sync.
 
@@ -198,35 +221,67 @@ CLASS ZCL_ABAPGIT_MCP_SYNC IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD check_transport.
-
-    DATA lv_transport TYPE trkorr.
-
-    lv_transport = to_upper( iv_transport ).
-
-    IF cs_checks-transport-required = abap_true AND lv_transport IS INITIAL.
-      zcx_abapgit_mcp_sync=>raise(
-        iv_code = zif_abapgit_mcp_sync=>c_error-transport_required
-        iv_text = |The package records changes; pass "transport" (request type { cs_checks-transport-type-request })| ).
-    ENDIF.
-
-    IF lv_transport IS INITIAL.
-      RETURN.
-    ENDIF.
+  METHOD check_modifiable_task.
 
     " Without a modifiable task, deserialize silently writes nothing
     SELECT SINGLE @abap_true FROM e070
-      WHERE strkorr  = @lv_transport
+      WHERE strkorr  = @iv_request
         AND as4user  = @sy-uname
         AND trstatus = 'D'
       INTO @DATA(lv_task_exists).
     IF sy-subrc <> 0 OR lv_task_exists = abap_false.
       zcx_abapgit_mcp_sync=>raise(
         iv_code = zif_abapgit_mcp_sync=>c_error-no_modifiable_task
-        iv_text = |User { sy-uname } has no modifiable task in { lv_transport }| ).
+        iv_text = |User { sy-uname } has no modifiable task in { iv_request }| ).
     ENDIF.
 
-    cs_checks-transport-transport = lv_transport.
+  ENDMETHOD.
+
+
+  METHOD check_request_type.
+
+    IF iv_type IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    SELECT SINGLE trfunction FROM e070
+      WHERE trkorr = @iv_request
+      INTO @DATA(lv_type).
+    IF sy-subrc <> 0 OR lv_type <> iv_type.
+      zcx_abapgit_mcp_sync=>raise(
+        iv_code = zif_abapgit_mcp_sync=>c_error-transport_required
+        iv_text = |The customizing table content needs a request of type { iv_type }; | &&
+                  COND #( WHEN lv_type IS INITIAL THEN |{ iv_request } does not exist|
+                          ELSE |{ iv_request } has type { lv_type }| ) ).
+    ENDIF.
+
+  ENDMETHOD.
+
+
+  METHOD check_transport.
+
+    " One request member, two transport parts: see the transport rule
+    DATA(ls_transports) = zcl_abapgit_mcp_guard=>assign_transports(
+      iv_transport            = iv_transport
+      iv_workbench_required   = cs_checks-transport-required
+      iv_workbench_type       = cs_checks-transport-type-request
+      iv_customizing_required = cs_checks-customizing-required
+      iv_customizing_preset   = cs_checks-customizing-transport ).
+
+    IF ls_transports-workbench IS NOT INITIAL.
+      check_modifiable_task( CONV #( ls_transports-workbench ) ).
+    ENDIF.
+
+    IF ls_transports-customizing IS NOT INITIAL.
+      check_request_type( iv_request = CONV #( ls_transports-customizing )
+                          iv_type    = cs_checks-customizing-type-request ).
+      IF ls_transports-customizing <> ls_transports-workbench.
+        check_modifiable_task( CONV #( ls_transports-customizing ) ).
+      ENDIF.
+    ENDIF.
+
+    cs_checks-transport-transport   = ls_transports-workbench.
+    cs_checks-customizing-transport = ls_transports-customizing.
 
   ENDMETHOD.
 
@@ -625,8 +680,8 @@ CLASS ZCL_ABAPGIT_MCP_SYNC IMPLEMENTATION.
     DATA lt_params TYPE abap_parmbind_tab.
 
     " The stage logic moved in the refactor released with abapGit 1.132.0, and
-    " the repository parameter was renamed from IO_REPO to II_REPO. Both are
-    " resolved at runtime, so that the companion compiles on both versions.
+    " the repository parameter was renamed from IO_REPO to II_REPO_ONLINE. Both
+    " are resolved at runtime, so that the companion compiles on both versions.
     DATA(lo_factory) = CAST cl_abap_classdescr( cl_abap_typedescr=>describe_by_name( 'ZCL_ABAPGIT_STAGE_LOGIC' ) ).
     IF line_exists( lo_factory->methods[ name = 'GET_STAGE_LOGIC' ] ).
       DATA(lv_factory_class) = `ZCL_ABAPGIT_STAGE_LOGIC`.
@@ -642,13 +697,20 @@ CLASS ZCL_ABAPGIT_MCP_SYNC IMPLEMENTATION.
     DATA(lo_intf) = CAST cl_abap_intfdescr( cl_abap_typedescr=>describe_by_name( 'ZIF_ABAPGIT_STAGE_LOGIC' ) ).
     DATA(ls_get) = lo_intf->methods[ name = 'GET' ].
 
+    DATA(lv_repo_parameter) = stage_repo_parameter( ls_get-parameters ).
+    IF lv_repo_parameter IS INITIAL.
+      zcx_abapgit_mcp_sync=>raise(
+        iv_code = zif_abapgit_mcp_sync=>c_error-internal
+        iv_text = `ZIF_ABAPGIT_STAGE_LOGIC~GET has no known repository parameter; this abapGit version is not supported` ).
+    ENDIF.
+
     DATA(li_filter) = CAST zif_abapgit_object_filter( NEW lcl_object_filter( it_objects ) ).
     CLEAR lt_params.
+    " A reference to the online repository class is up-cast to whichever type the parameter has
+    INSERT VALUE #( name = lv_repo_parameter kind = cl_abap_objectdescr=>exporting value = REF #( io_repo ) )
+      INTO TABLE lt_params.
     LOOP AT ls_get-parameters INTO DATA(ls_param).
       CASE ls_param-name.
-        WHEN 'IO_REPO' OR 'II_REPO'.
-          INSERT VALUE #( name = ls_param-name kind = cl_abap_objectdescr=>exporting value = REF #( io_repo ) )
-            INTO TABLE lt_params.
         WHEN 'II_OBJ_FILTER'.
           INSERT VALUE #( name = ls_param-name kind = cl_abap_objectdescr=>exporting value = REF #( li_filter ) )
             INTO TABLE lt_params.
@@ -665,6 +727,17 @@ CLASS ZCL_ABAPGIT_MCP_SYNC IMPLEMENTATION.
       CATCH cx_sy_dyn_call_error INTO DATA(lx_call).
         raise_internal( lx_call ).
     ENDTRY.
+
+  ENDMETHOD.
+
+
+  METHOD stage_repo_parameter.
+
+    LOOP AT it_parameters INTO DATA(ls_parameter)
+         WHERE name = 'IO_REPO' OR name = 'II_REPO_ONLINE'.
+      rv_name = ls_parameter-name.
+      RETURN.
+    ENDLOOP.
 
   ENDMETHOD.
 

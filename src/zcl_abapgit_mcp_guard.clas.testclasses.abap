@@ -303,3 +303,99 @@ CLASS ltcl_decidable_state IMPLEMENTATION.
   ENDMETHOD.
 
 ENDCLASS.
+
+
+CLASS ltcl_transport_rule DEFINITION FINAL FOR TESTING
+  DURATION SHORT
+  RISK LEVEL HARMLESS.
+
+  PRIVATE SECTION.
+    CONSTANTS c_workbench   TYPE string VALUE `WBREQUEST`.
+    CONSTANTS c_customizing TYPE string VALUE `CUREQUEST`.
+
+    METHODS assert_refused
+      IMPORTING
+        iv_transport            TYPE string
+        iv_workbench_required   TYPE abap_bool
+        iv_customizing_required TYPE abap_bool
+        iv_customizing_preset   TYPE string OPTIONAL.
+
+    METHODS workbench_needs_transport     FOR TESTING.
+    METHODS workbench_gets_transport      FOR TESTING RAISING zcx_abapgit_mcp_sync.
+    METHODS customizing_preset_is_kept    FOR TESTING RAISING zcx_abapgit_mcp_sync.
+    METHODS mixed_without_preset_refused  FOR TESTING.
+    METHODS customizing_only_uses_request FOR TESTING RAISING zcx_abapgit_mcp_sync.
+    METHODS customizing_only_needs_request FOR TESTING.
+ENDCLASS.
+
+
+CLASS ltcl_transport_rule IMPLEMENTATION.
+
+  METHOD assert_refused.
+    DATA lx_error TYPE REF TO zcx_abapgit_mcp_sync.
+
+    TRY.
+        zcl_abapgit_mcp_guard=>assign_transports( iv_transport            = iv_transport
+                                                  iv_workbench_required   = iv_workbench_required
+                                                  iv_customizing_required = iv_customizing_required
+                                                  iv_customizing_preset   = iv_customizing_preset ).
+      CATCH zcx_abapgit_mcp_sync INTO lx_error.
+    ENDTRY.
+    cl_abap_unit_assert=>assert_bound( lx_error ).
+    cl_abap_unit_assert=>assert_equals( exp = zif_abapgit_mcp_sync=>c_error-transport_required
+                                        act = lx_error->mv_code ).
+  ENDMETHOD.
+
+
+  METHOD workbench_needs_transport.
+    assert_refused( iv_transport            = ``
+                    iv_workbench_required   = abap_true
+                    iv_customizing_required = abap_false ).
+  ENDMETHOD.
+
+
+  METHOD workbench_gets_transport.
+    cl_abap_unit_assert=>assert_equals(
+      exp = VALUE zcl_abapgit_mcp_guard=>ty_transports( workbench = c_workbench )
+      act = zcl_abapgit_mcp_guard=>assign_transports( iv_transport            = to_lower( c_workbench )
+                                                      iv_workbench_required   = abap_true
+                                                      iv_customizing_required = abap_false ) ).
+  ENDMETHOD.
+
+
+  METHOD customizing_preset_is_kept.
+    " Objects and table content: the customizing request comes from the repository setting
+    cl_abap_unit_assert=>assert_equals(
+      exp = VALUE zcl_abapgit_mcp_guard=>ty_transports( workbench   = c_workbench
+                                                        customizing = c_customizing )
+      act = zcl_abapgit_mcp_guard=>assign_transports( iv_transport            = c_workbench
+                                                      iv_workbench_required   = abap_true
+                                                      iv_customizing_required = abap_true
+                                                      iv_customizing_preset   = c_customizing ) ).
+  ENDMETHOD.
+
+
+  METHOD mixed_without_preset_refused.
+    " One request member cannot carry both a workbench and a customizing request
+    assert_refused( iv_transport            = c_workbench
+                    iv_workbench_required   = abap_true
+                    iv_customizing_required = abap_true ).
+  ENDMETHOD.
+
+
+  METHOD customizing_only_uses_request.
+    cl_abap_unit_assert=>assert_equals(
+      exp = VALUE zcl_abapgit_mcp_guard=>ty_transports( customizing = c_customizing )
+      act = zcl_abapgit_mcp_guard=>assign_transports( iv_transport            = c_customizing
+                                                      iv_workbench_required   = abap_false
+                                                      iv_customizing_required = abap_true ) ).
+  ENDMETHOD.
+
+
+  METHOD customizing_only_needs_request.
+    assert_refused( iv_transport            = ``
+                    iv_workbench_required   = abap_false
+                    iv_customizing_required = abap_true ).
+  ENDMETHOD.
+
+ENDCLASS.

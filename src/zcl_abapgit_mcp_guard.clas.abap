@@ -1,8 +1,8 @@
 "! <p class="shorttext synchronized">abapGit sync: guard rules for pull and push</p>
 "! Pure rules without access to abapGit or the database, so that they can be
 "! tested in isolation. ZCL_ABAPGIT_MCP_SYNC feeds them with the per-file
-"! status table (ZCL_ABAPGIT_REPO_STATUS=&gt;calculate) and the decision tables
-"! of the deserialize checks.
+"! status table (ZCL_ABAPGIT_REPO_STATUS=&gt;calculate), the decision tables
+"! and the transport parts of the deserialize checks.
 CLASS zcl_abapgit_mcp_guard DEFINITION
   PUBLIC
   FINAL
@@ -78,6 +78,41 @@ CLASS zcl_abapgit_mcp_guard DEFINITION
       RETURNING
         VALUE(rv_text) TYPE string.
 
+    TYPES:
+      "! Requests a pull records its changes in; empty if none is needed
+      BEGIN OF ty_transports,
+        workbench   TYPE string,
+        customizing TYPE string,
+      END OF ty_transports.
+
+    "! Transport rule for a pull. abapGit records objects in a workbench
+    "! request and table content (customizing) in a separate customizing
+    "! request, while the pull request carries a single "transport".
+    "! - The workbench request is always "transport".
+    "! - The customizing request is the one abapGit pre-fills from the
+    "!   repository setting. Without one, "transport" is used for it, but
+    "!   only if no workbench request is needed. A pull that needs both and
+    "!   has no customizing request in the repository setting is refused:
+    "!   with an empty customizing request abapGit opens a transport dialog
+    "!   after the table content is already written.
+    "! @parameter iv_transport | the request member "transport"
+    "! @parameter iv_workbench_required | deserialize checks: transport-required
+    "! @parameter iv_workbench_type | deserialize checks: transport-type-request
+    "! @parameter iv_customizing_required | deserialize checks: customizing-required
+    "! @parameter iv_customizing_preset | deserialize checks: customizing-transport
+    "! @raising zcx_abapgit_mcp_sync | TRANSPORT_REQUIRED
+    CLASS-METHODS assign_transports
+      IMPORTING
+        iv_transport            TYPE csequence
+        iv_workbench_required   TYPE abap_bool
+        iv_workbench_type       TYPE csequence OPTIONAL
+        iv_customizing_required TYPE abap_bool
+        iv_customizing_preset   TYPE csequence OPTIONAL
+      RETURNING
+        VALUE(rs_transports)    TYPE ty_transports
+      RAISING
+        zcx_abapgit_mcp_sync.
+
   PRIVATE SECTION.
 
     CLASS-METHODS files_of_object
@@ -107,6 +142,48 @@ ENDCLASS.
 
 
 CLASS ZCL_ABAPGIT_MCP_GUARD IMPLEMENTATION.
+
+
+  METHOD assign_transports.
+
+    DATA(lv_transport) = to_upper( condense( iv_transport ) ).
+
+    IF iv_workbench_required = abap_true AND lv_transport IS INITIAL.
+      zcx_abapgit_mcp_sync=>raise(
+        iv_code = zif_abapgit_mcp_sync=>c_error-transport_required
+        iv_text = |The package records changes; pass "transport" (request type { iv_workbench_type })| ).
+    ENDIF.
+
+    rs_transports-workbench = lv_transport.
+
+    IF iv_customizing_required = abap_false.
+      RETURN.
+    ENDIF.
+
+    rs_transports-customizing = to_upper( condense( iv_customizing_preset ) ).
+    IF rs_transports-customizing IS NOT INITIAL.
+      RETURN.
+    ENDIF.
+
+    IF iv_workbench_required = abap_true.
+      zcx_abapgit_mcp_sync=>raise(
+        iv_code = zif_abapgit_mcp_sync=>c_error-transport_required
+        iv_text = |The pull writes objects and customizing table content, which need a workbench and | &&
+                  |a customizing request, but "transport" carries one request only; | &&
+                  |set the customizing request in the abapGit repository settings| ).
+    ENDIF.
+
+    IF lv_transport IS INITIAL.
+      zcx_abapgit_mcp_sync=>raise(
+        iv_code = zif_abapgit_mcp_sync=>c_error-transport_required
+        iv_text = `The pull writes customizing table content; pass a customizing request as "transport"` ).
+    ENDIF.
+
+    " No workbench request is needed, so "transport" serves the customizing part only
+    rs_transports-customizing = lv_transport.
+    CLEAR rs_transports-workbench.
+
+  ENDMETHOD.
 
 
   METHOD files_of_object.

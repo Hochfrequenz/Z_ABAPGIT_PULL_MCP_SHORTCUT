@@ -7,8 +7,8 @@ Tested on R/3 and S/4.
 
 ## Names
 
-| Object       | Name                          |
-| ------------ | ----------------------------- |
+| Object                       | Name                                                         |
+| ---------------------------- | ------------------------------------------------------------ |
 | Package      | `Z_ABAPGIT_PULL_MCP_SHORTCUT` |
 | Report       | `Z_ABAPGIT_PULL_MCP_SHORTCUT` |
 | Transaction  | `Z_ABAPGIT_PULL_MCP`          |
@@ -68,7 +68,7 @@ Pulls (deserializes) a Git repository into SAP via the abapGit API.
 **Parameters:**
 
 | Parameter  | Required | Description                                      |
-| ---------- | -------- | ------------------------------------------------ |
+| ---------------------------- | ------------------------------------------------------------ |
 | `P_ACTION` | No       | `PULL` (default)                                  |
 | `P_REPO`   | Yes      | Exact repository name or URL (case-insensitive)   |
 | `P_TRKORR` | If req.  | Transport request (required if system enforces it) |
@@ -127,7 +127,7 @@ Lists all registered abapGit repositories with metadata.
 **Parameters:**
 
 | Parameter  | Required | Description    |
-| ---------- | -------- | -------------- |
+| ---------------------------- | ------------------------------------------------------------ |
 | `P_ACTION` | Yes      | Must be `LIST` |
 
 **Output format:** Tilde-delimited lines via `WRITE`. The **first** line is a
@@ -175,7 +175,7 @@ bodies, error codes, guard rules) is the design spec on
 [aibap.mcp#135](https://github.com/Hochfrequenz/aibap.mcp/issues/135).
 
 | Method | Path                              | Purpose                                 |
-| ------ | --------------------------------- | --------------------------------------- |
+| ---------------------------- | ------------------------------------------------------------ |
 | GET    | `/sap/bc/adt/abapgitsync/repos`   | List the registered repositories        |
 | POST   | `/sap/bc/adt/abapgitsync/pull`    | Pull, with confirmation of local work   |
 | POST   | `/sap/bc/adt/abapgitsync/push`    | Push the files of named objects         |
@@ -185,22 +185,31 @@ The path lies outside `/sap/bc/adt/abapgit/`, because the deprecated
 pattern. Registration is the enhancement implementation `ZABAPGIT_MCP_SYNC_ADT`
 of `BADI_ADT_REST_RFC_APPLICATION` plus a discovery provider.
 
-| Object                     | Role                                                         |
-| -------------------------- | ------------------------------------------------------------ |
-| `ZCL_ABAPGIT_MCP_SYNC`     | Logic: repository matching, list, pull, push                 |
-| `ZCL_ABAPGIT_MCP_GUARD`    | Pure guard rules for pull and push (ABAP Unit)               |
-| `ZCL_ABAPGIT_MCP_GIT_AUTH` | Credential preflight against the Git host                    |
-| `ZCX_ABAPGIT_MCP_SYNC`     | Error with contract code and HTTP status                     |
-| `ZCL_ABAPGIT_MCP_JSON`     | JSON bodies through the Simple Transformations `ZABAPGIT_MCP_*` |
-| `ZCL_ABAPGIT_MCP_ADT_*`    | ADT application and the three resources                      |
-| `ZIF_ABAPGIT_MCP_SYNC`     | Contract types and constants                                 |
+| Object                       | Role                                                         |
+| ---------------------------- | ------------------------------------------------------------ |
+| `ZCL_ABAPGIT_MCP_SYNC`       | Logic: list, pull, push                                      |
+| `ZCL_ABAPGIT_MCP_REPO_MATCH` | Exact repository matching, shared with the report            |
+| `ZCL_ABAPGIT_MCP_GUARD`      | Pure guard rules for pull and push (ABAP Unit)               |
+| `ZCL_ABAPGIT_MCP_GIT_AUTH`   | Credential preflight against the Git host                    |
+| `ZCX_ABAPGIT_MCP_SYNC`       | Error with contract code and HTTP status                     |
+| `ZCL_ABAPGIT_MCP_JSON`       | JSON bodies through the Simple Transformations `ZABAPGIT_MCP_*` |
+| `ZCL_ABAPGIT_MCP_ADT_*`      | ADT application and the three resources                      |
+| `ZIF_ABAPGIT_MCP_SYNC`       | Contract types and constants                                 |
 
-The report uses the same repository matching (`ZCL_ABAPGIT_MCP_SYNC=>find_online_repos`)
+The report uses the same repository matching (`ZCL_ABAPGIT_MCP_REPO_MATCH=>find_online_repos`)
 and otherwise behaves as described above. The endpoints differ from the report
 in two ways on purpose: a pull that would touch local work answers
 `needs_confirmation` instead of overwriting, and a confirmed pull deletes
 objects that were deleted in Git, in the same order as the abapGit UI
 (delete, refresh, deserialize). The report never deletes.
+
+A pull takes one `transport`. abapGit records objects in a workbench request
+and table content of a repository with a data configuration (customizing) in a
+separate customizing request. The endpoint takes the customizing request from
+the abapGit repository setting "customizing request"; `transport` is used for
+it only when no workbench request is needed. A pull that needs both and has no
+customizing request in the repository setting is refused with
+`TRANSPORT_REQUIRED`, as is a customizing request of the wrong type.
 
 ### Git credentials: the `ZGIT_<SAP user>` destination
 
