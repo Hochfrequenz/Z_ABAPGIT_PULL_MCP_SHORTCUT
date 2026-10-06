@@ -45,6 +45,8 @@ CLASS ltcl_git_auth IMPLEMENTATION.
                                         act = zcl_abapgit_mcp_git_auth=>url_base( `https://github.com/a/b.git` ) ).
     cl_abap_unit_assert=>assert_equals( exp = `/a/b.git`
                                         act = zcl_abapgit_mcp_git_auth=>url_path( `https://github.com/a/b.git` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `/a/b`
+                                        act = zcl_abapgit_mcp_git_auth=>url_path( `https://github.com/a/b/` ) ).
   ENDMETHOD.
 
 ENDCLASS.

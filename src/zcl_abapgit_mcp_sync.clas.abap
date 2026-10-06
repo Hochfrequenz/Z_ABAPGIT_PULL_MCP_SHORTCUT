@@ -9,8 +9,6 @@ CLASS zcl_abapgit_mcp_sync DEFINITION
 
   PUBLIC SECTION.
 
-    TYPES ty_online_repos TYPE STANDARD TABLE OF REF TO zcl_abapgit_repo_online WITH EMPTY KEY.
-
     "! @parameter io_git_auth | credential preflight; default uses ZGIT_&lt;SAP user&gt;
     METHODS constructor
       IMPORTING
@@ -37,23 +35,6 @@ CLASS zcl_abapgit_mcp_sync DEFINITION
         VALUE(rs_result) TYPE zif_abapgit_mcp_sync=>ty_push_result
       RAISING
         zcx_abapgit_mcp_sync.
-
-    "! Online repositories whose name (case-insensitive) or normalised URL
-    "! equals iv_repo exactly. Never a substring match.
-    CLASS-METHODS find_online_repos
-      IMPORTING
-        iv_repo        TYPE csequence
-      RETURNING
-        VALUE(rt_hits) TYPE ty_online_repos
-      RAISING
-        zcx_abapgit_exception.
-
-    "! Upper case, without a trailing slash and a .git suffix
-    CLASS-METHODS normalise_url
-      IMPORTING
-        iv_url        TYPE csequence
-      RETURNING
-        VALUE(rv_url) TYPE string.
 
     "! ISO 8601 in UTC, e.g. 2026-10-06T07:42:34Z; empty for an initial value
     CLASS-METHODS to_iso_timestamp
@@ -368,32 +349,6 @@ CLASS ZCL_ABAPGIT_MCP_SYNC IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD find_online_repos.
-
-    DATA lo_online TYPE REF TO zcl_abapgit_repo_online.
-
-    " Two comparands on purpose: the URL is normalised (a trailing slash and a
-    " .git suffix are noise there), the name is only uppercased.
-    DATA(lv_want_url)  = normalise_url( iv_repo ).
-    DATA(lv_want_name) = to_upper( iv_repo ).
-
-    LOOP AT zcl_abapgit_repo_srv=>get_instance( )->list( iv_offline = abap_false ) INTO DATA(li_repo).
-      " Defensive: an unguarded cast would abort the search on one bad entry
-      TRY.
-          lo_online ?= li_repo.
-        CATCH cx_sy_move_cast_error.
-          CONTINUE.
-      ENDTRY.
-
-      IF to_upper( lo_online->get_name( ) ) = lv_want_name
-         OR normalise_url( lo_online->get_url( ) ) = lv_want_url.
-        APPEND lo_online TO rt_hits.
-      ENDIF.
-    ENDLOOP.
-
-  ENDMETHOD.
-
-
   METHOD guard_files.
 
     rt_files = VALUE #( FOR ls_result IN it_status
@@ -437,7 +392,8 @@ CLASS ZCL_ABAPGIT_MCP_SYNC IMPLEMENTATION.
     ENDIF.
 
     rt_log = VALUE #( FOR ls_message IN ii_log->get_messages( )
-                      ( type     = ls_message-type
+                      " The contract knows E, W and I; abapGit's success messages are informational
+                      ( type     = COND #( WHEN ls_message-type = 'S' THEN `I` ELSE ls_message-type )
                         text     = ls_message-text
                         obj_type = ls_message-obj_type
                         obj_name = ls_message-obj_name ) ).
@@ -453,19 +409,6 @@ CLASS ZCL_ABAPGIT_MCP_SYNC IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD normalise_url.
-
-    rv_url = to_upper( iv_url ).
-    IF rv_url CP '*/'.
-      rv_url = substring( val = rv_url len = strlen( rv_url ) - 1 ).
-    ENDIF.
-    IF rv_url CP '*.GIT'.
-      rv_url = substring( val = rv_url len = strlen( rv_url ) - 4 ).
-    ENDIF.
-
-  ENDMETHOD.
-
-
   METHOD pull.
 
     DATA li_log TYPE REF TO zif_abapgit_log.
@@ -474,6 +417,11 @@ CLASS ZCL_ABAPGIT_MCP_SYNC IMPLEMENTATION.
       zcx_abapgit_mcp_sync=>raise( iv_code = zif_abapgit_mcp_sync=>c_error-bad_request
                                    iv_text = `Member "repo" is required` ).
     ENDIF.
+    LOOP AT is_request-confirm TRANSPORTING NO FIELDS
+         WHERE obj_type IS INITIAL OR obj_name IS INITIAL OR action IS INITIAL.
+      zcx_abapgit_mcp_sync=>raise( iv_code = zif_abapgit_mcp_sync=>c_error-bad_request
+                                   iv_text = `Every "confirm" entry needs "obj_type", "obj_name" and "action"` ).
+    ENDLOOP.
 
     DATA(lo_repo) = resolve_repo( is_request-repo ).
     rs_result-repo = VALUE #( name    = lo_repo->get_name( )
@@ -536,6 +484,10 @@ CLASS ZCL_ABAPGIT_MCP_SYNC IMPLEMENTATION.
       zcx_abapgit_mcp_sync=>raise( iv_code = zif_abapgit_mcp_sync=>c_error-bad_request
                                    iv_text = `Members "repo", "objects" and "message" are required` ).
     ENDIF.
+    LOOP AT is_request-objects TRANSPORTING NO FIELDS WHERE obj_type IS INITIAL OR obj_name IS INITIAL.
+      zcx_abapgit_mcp_sync=>raise( iv_code = zif_abapgit_mcp_sync=>c_error-bad_request
+                                   iv_text = `Every "objects" entry needs "obj_type" and "obj_name"` ).
+    ENDLOOP.
 
     DATA(lo_repo) = resolve_repo( is_request-repo ).
     mo_git_auth->preflight( iv_url                  = lo_repo->get_url( )
@@ -646,7 +598,7 @@ CLASS ZCL_ABAPGIT_MCP_SYNC IMPLEMENTATION.
   METHOD resolve_repo.
 
     TRY.
-        DATA(lt_hits) = find_online_repos( iv_repo ).
+        DATA(lt_hits) = zcl_abapgit_mcp_repo_match=>find_online_repos( iv_repo ).
       CATCH zcx_abapgit_exception INTO DATA(lx_error).
         raise_internal( lx_error ).
     ENDTRY.

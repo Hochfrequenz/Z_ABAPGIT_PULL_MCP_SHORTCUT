@@ -222,6 +222,11 @@ HTTP destination:
 Creating a destination needs SM59 authorisation (`S_RFC_ADM`). A user without it
 asks their Basis team.
 
+Leave the destination's path prefix empty: the companion appends the repository
+path itself. If your system reaches github.com only through a proxy, enter it
+in the destination too; abapGit's own proxy settings apply to abapGit's
+requests, not to the credential preflight that runs through the destination.
+
 **The protection is weak.** The password sits in SAP's secure store and cannot
 be read back in clear, but the destination itself can be used by others:
 without an authorisation group any user can send requests through it; with a

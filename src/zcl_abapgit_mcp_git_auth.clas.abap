@@ -192,6 +192,19 @@ CLASS ZCL_ABAPGIT_MCP_GIT_AUTH IMPLEMENTATION.
 
     DATA(lv_authorization) = ii_client->request->get_header_field( `authorization` ).
     IF lv_authorization IS INITIAL.
+      " The destination's logon data is not exposed on the request. abapGit can
+      " then only authenticate through a user exit (create_http_client); without
+      " one, its own request would run anonymously and fail later with a
+      " misleading error.
+      cl_abap_typedescr=>describe_by_name( EXPORTING  p_name      = 'ZCL_ABAPGIT_USER_EXIT'
+                                           EXCEPTIONS type_not_found = 1
+                                                      OTHERS         = 2 ).
+      IF sy-subrc <> 0.
+        zcx_abapgit_mcp_sync=>raise(
+          iv_code = zif_abapgit_mcp_sync=>c_error-credentials_missing
+          iv_text = |The credentials of { mv_destination } cannot be handed to abapGit on this system | &&
+                    |(no Authorization header, no ZCL_ABAPGIT_USER_EXIT); see the companion README| ).
+      ENDIF.
       RETURN.
     ENDIF.
 
@@ -326,6 +339,9 @@ CLASS ZCL_ABAPGIT_MCP_GIT_AUTH IMPLEMENTATION.
     FIND FIRST OCCURRENCE OF `/` IN SECTION OFFSET lv_start OF iv_url MATCH OFFSET DATA(lv_path_start).
     IF sy-subrc = 0.
       rv_path = substring( val = iv_url off = lv_path_start ).
+    ENDIF.
+    IF rv_path CP '*/'.
+      rv_path = substring( val = rv_path len = strlen( rv_path ) - 1 ).
     ENDIF.
 
   ENDMETHOD.

@@ -91,11 +91,11 @@ START-OF-SELECTION.
       " (it must, to run unattended), that meant deserializing over an
       " unrelated package and reporting success.
       "
-      " The matching lives in ZCL_ABAPGIT_MCP_SYNC, so that this report and
+      " The matching lives in ZCL_ABAPGIT_MCP_REPO_MATCH, so that this report and
       " the ADT endpoints under /sap/bc/adt/abapgitsync/ resolve a
       " repository the same way: name (case-insensitive) or URL without a
       " trailing slash and .git suffix, online repositories only.
-      DATA(lt_hits) = zcl_abapgit_mcp_sync=>find_online_repos( p_repo ).
+      DATA(lt_hits) = zcl_abapgit_mcp_repo_match=>find_online_repos( p_repo ).
 
       IF lines( lt_hits ) = 0.
         " Kept short on purpose: the status bar cuts at about 73

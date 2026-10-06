@@ -37,7 +37,11 @@ CLASS zcl_abapgit_mcp_adt_res IMPLEMENTATION.
 
   METHOD request_body.
 
-    rv_body = io_request->get_inner_rest_request( )->get_entity( )->get_string_data( ).
+    " Decoded as UTF-8 explicitly: clients send application/json without a
+    " charset, and the text ends up in commit messages on a public Git host
+    rv_body = cl_abap_codepage=>convert_from(
+                source   = io_request->get_inner_rest_request( )->get_entity( )->get_binary_data( )
+                codepage = `UTF-8` ).
 
   ENDMETHOD.
 
@@ -45,7 +49,7 @@ CLASS zcl_abapgit_mcp_adt_res IMPLEMENTATION.
   METHOD respond.
 
     DATA(li_entity) = io_response->get_inner_rest_response( )->create_entity( ).
-    li_entity->set_content_type( iv_media_type = `application/json` ).
+    li_entity->set_content_type( iv_media_type = `application/json; charset=utf-8` ).
     li_entity->set_string_data( iv_json ).
     io_response->set_status( iv_status ).
 

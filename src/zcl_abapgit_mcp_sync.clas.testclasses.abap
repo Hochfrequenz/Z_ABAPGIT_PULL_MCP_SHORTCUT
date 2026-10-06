@@ -3,11 +3,12 @@ CLASS ltcl_sync DEFINITION FINAL FOR TESTING
   RISK LEVEL HARMLESS.
 
   PRIVATE SECTION.
-    METHODS url_normalisation          FOR TESTING.
     METHODS iso_timestamp              FOR TESTING.
     METHODS pull_without_repo_is_bad   FOR TESTING.
     METHODS push_without_objects_is_bad FOR TESTING.
     METHODS unknown_repo_is_not_found  FOR TESTING.
+    METHODS empty_object_name_is_bad   FOR TESTING.
+    METHODS empty_confirm_action_is_bad FOR TESTING.
 
     METHODS assert_code
       IMPORTING
@@ -23,16 +24,6 @@ CLASS ltcl_sync IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( exp = iv_code act = ix_error->mv_code ).
   ENDMETHOD.
 
-
-  METHOD url_normalisation.
-    DATA(lv_expected) = `HTTPS://GITHUB.COM/EXAMPLE/REPO`.
-    cl_abap_unit_assert=>assert_equals(
-      exp = lv_expected act = zcl_abapgit_mcp_sync=>normalise_url( `https://github.com/example/repo` ) ).
-    cl_abap_unit_assert=>assert_equals(
-      exp = lv_expected act = zcl_abapgit_mcp_sync=>normalise_url( `https://github.com/example/repo.git` ) ).
-    cl_abap_unit_assert=>assert_equals(
-      exp = lv_expected act = zcl_abapgit_mcp_sync=>normalise_url( `https://github.com/Example/Repo/` ) ).
-  ENDMETHOD.
 
 
   METHOD iso_timestamp.
@@ -76,6 +67,32 @@ CLASS ltcl_sync IMPLEMENTATION.
     ENDTRY.
     assert_code( ix_error = lx_error iv_code = zif_abapgit_mcp_sync=>c_error-repo_not_found ).
     cl_abap_unit_assert=>assert_equals( exp = 404 act = lx_error->http_status( ) ).
+  ENDMETHOD.
+
+
+  METHOD empty_object_name_is_bad.
+    DATA lx_error TYPE REF TO zcx_abapgit_mcp_sync.
+
+    " Rejected before the repository is resolved or any Git host is contacted
+    TRY.
+        NEW zcl_abapgit_mcp_sync( )->push( VALUE #( repo    = `https://example.invalid/no/such/repo.git`
+                                                    message = `msg`
+                                                    objects = VALUE #( ( obj_type = `PROG` obj_name = `` ) ) ) ).
+      CATCH zcx_abapgit_mcp_sync INTO lx_error.
+    ENDTRY.
+    assert_code( ix_error = lx_error iv_code = zif_abapgit_mcp_sync=>c_error-bad_request ).
+  ENDMETHOD.
+
+
+  METHOD empty_confirm_action_is_bad.
+    DATA lx_error TYPE REF TO zcx_abapgit_mcp_sync.
+
+    TRY.
+        NEW zcl_abapgit_mcp_sync( )->pull( VALUE #( repo    = `https://example.invalid/no/such/repo.git`
+                                                    confirm = VALUE #( ( obj_type = `CLAS` obj_name = `ZCL_EXAMPLE` ) ) ) ).
+      CATCH zcx_abapgit_mcp_sync INTO lx_error.
+    ENDTRY.
+    assert_code( ix_error = lx_error iv_code = zif_abapgit_mcp_sync=>c_error-bad_request ).
   ENDMETHOD.
 
 ENDCLASS.
