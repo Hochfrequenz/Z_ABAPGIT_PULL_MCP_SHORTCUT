@@ -147,6 +147,9 @@ An unknown branch ends the pull before anything is changed:
 Branch not found: <value> (selected branch unchanged)
 ```
 
+If the branch list of the remote cannot be fetched (host, credentials), the report shows abapGit's error text, and the endpoint answers `INTERNAL`, like for every other abapGit failure.
+The selected branch stays unchanged then, too.
+
 **The switch is persistent.**
 The repository stays on that branch afterwards, like after a branch switch in the abapGit UI, also when the pull fails or asks for a confirmation.
 A caller that needs the previous state switches back with a second call.
@@ -258,7 +261,7 @@ customizing request in the repository setting is refused with
 | ----------------------------- | ------------------------ | ------------------------------------------------------------ |
 | old, sends no `branch`        | new                      | works as before; the result has an additional `repo.branch`  |
 | new, sends no `branch`        | old                      | works as before                                              |
-| new, sends `branch`           | old                      | error expected: the old companion does not know `branch`; if an old endpoint ignored it instead, the pull would run on the selected branch, so check `repo.branch` in the result |
+| new, sends `branch`           | old                      | error expected: the old companion does not know `branch`; if an old endpoint ignored it instead, the pull would run on the selected branch, so treat an empty or missing `repo.branch` in the result as an old companion |
 | new, sends `branch`           | new                      | the branch is switched and pulled                            |
 
 ### Git credentials: the `ZGIT_<SAP user>` destination
