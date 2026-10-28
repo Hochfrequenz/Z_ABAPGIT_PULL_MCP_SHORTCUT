@@ -84,7 +84,14 @@ CLASS zcl_abapgit_mcp_branch IMPLEMENTATION.
   METHOD select_in.
 
     DATA(lv_branch) = normalise( iv_branch ).
-    IF lv_branch IS INITIAL OR lv_branch = ii_gateway->selected_branch( ).
+    IF lv_branch IS INITIAL.
+      rv_found = abap_true.
+      RETURN.
+    ENDIF.
+    " Same branch is a no-op only when the repository follows it. A pin to a commit
+    " would survive and the pull would deserialize the pinned commit, so select the
+    " branch again: select_branch clears the pin.
+    IF lv_branch = ii_gateway->selected_branch( ) AND ii_gateway->selected_commit( ) IS INITIAL.
       rv_found = abap_true.
       RETURN.
     ENDIF.

@@ -9,6 +9,13 @@ INTERFACE zif_abapgit_mcp_branch_gw PUBLIC.
     RETURNING
       VALUE(rv_branch) TYPE string.
 
+  "! Commit the repository is pinned to; initial when it follows its branch
+  METHODS selected_commit
+    RETURNING
+      VALUE(rv_commit) TYPE string
+    RAISING
+      zcx_abapgit_exception.
+
   "! Full names of the branches on the remote, e.g. refs/heads/main
   "! A failing request to the remote is raised, not answered by an empty list.
   METHODS remote_branches

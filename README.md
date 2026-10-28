@@ -138,7 +138,7 @@ The name is normalised first:
 | `refs/heads/main` | `refs/heads/main`      |
 | empty or blanks   | no switch              |
 
-Nothing happens if the normalised branch is the one that is selected already.
+Nothing happens if the normalised branch is the one that is selected already, unless the repository is pinned to a commit: then the branch is selected again, which clears the pin.
 Otherwise the report fetches the branch list of the remote and checks that the branch is in it.
 abapGit's `select_branch` does not check that itself.
 An unknown branch ends the pull before anything is changed:

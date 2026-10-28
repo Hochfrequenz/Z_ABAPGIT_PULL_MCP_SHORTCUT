@@ -26,6 +26,11 @@ CLASS lcl_abapgit_gateway IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD zif_abapgit_mcp_branch_gw~selected_commit.
+    rv_commit = mo_repo->get_selected_commit( ).
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_mcp_branch_gw~remote_branches.
     " Static method of the transport class: exists in old and new abapGit versions
     DATA(lo_list) = zcl_abapgit_git_transport=>branches( mo_repo->get_url( ) ).
