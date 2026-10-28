@@ -55,7 +55,7 @@ CLASS ltcl_branch DEFINITION FINAL FOR TESTING
     METHODS unknown_branch_not_selected FOR TESTING RAISING zcx_abapgit_exception.
     METHODS known_branch_is_selected    FOR TESTING RAISING zcx_abapgit_exception.
     METHODS selected_branch_is_noop     FOR TESTING RAISING zcx_abapgit_exception.
-    METHODS pinned_same_branch_is_reselected FOR TESTING RAISING zcx_abapgit_exception.
+    METHODS pinned_branch_is_reselected FOR TESTING RAISING zcx_abapgit_exception.
     METHODS remote_error_is_passed_on   FOR TESTING.
     METHODS bare_name_is_matched        FOR TESTING RAISING zcx_abapgit_exception.
 ENDCLASS.
@@ -149,7 +149,7 @@ CLASS ltcl_branch IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD pinned_same_branch_is_reselected.
+  METHOD pinned_branch_is_reselected.
     DATA(lo_double) = NEW ltcl_gateway_double( ).
     lo_double->mv_selected = `refs/heads/main`.
     lo_double->mv_commit = `0123456789abcdef0123456789abcdef01234567`.
