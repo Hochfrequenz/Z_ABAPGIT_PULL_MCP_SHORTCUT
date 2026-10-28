@@ -488,6 +488,17 @@ CLASS ZCL_ABAPGIT_MCP_SYNC IMPLEMENTATION.
                             iv_credentials_required = abap_false ).
 
     TRY.
+        " Persistent, like a switch in the abapGit UI: the repository stays on the branch.
+        " An unknown branch changes nothing.
+        IF is_request-branch IS NOT INITIAL
+           AND zcl_abapgit_mcp_branch=>select( io_repo   = lo_repo
+                                               iv_branch = is_request-branch ) = abap_false.
+          zcx_abapgit_mcp_sync=>raise(
+            iv_code = zif_abapgit_mcp_sync=>c_error-branch_not_found
+            iv_text = |Branch { zcl_abapgit_mcp_branch=>normalise( is_request-branch ) } does not exist in { rs_result-repo-url }; selected branch unchanged| ).
+        ENDIF.
+        rs_result-repo-branch = lo_repo->get_selected_branch( ).
+
         " Computed first: deserialize_checks( ) dumps on file states it cannot classify
         DATA(lt_status) = zcl_abapgit_repo_status=>calculate( lo_repo ).
         check_states_decidable( lt_status ).

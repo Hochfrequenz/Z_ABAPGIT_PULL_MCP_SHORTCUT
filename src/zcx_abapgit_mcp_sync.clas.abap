@@ -78,6 +78,7 @@ CLASS ZCX_ABAPGIT_MCP_SYNC IMPLEMENTATION.
     rv_status = SWITCH #( iv_code
       WHEN zif_abapgit_mcp_sync=>c_error-repo_not_found       THEN 404
       WHEN zif_abapgit_mcp_sync=>c_error-repo_ambiguous       THEN 409
+      WHEN zif_abapgit_mcp_sync=>c_error-branch_not_found     THEN 404
       WHEN zif_abapgit_mcp_sync=>c_error-remote_changed       THEN 409
       WHEN zif_abapgit_mcp_sync=>c_error-object_not_in_repo   THEN 422
       WHEN zif_abapgit_mcp_sync=>c_error-credentials_missing  THEN 422

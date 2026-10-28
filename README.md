@@ -71,6 +71,7 @@ Pulls (deserializes) a Git repository into SAP via the abapGit API.
 | ---------------------------- | ------------------------------------------------------------ |
 | `P_ACTION` | No       | `PULL` (default)                                  |
 | `P_REPO`   | Yes      | Exact repository name or URL (case-insensitive)   |
+| `P_BRANCH` | No       | Branch to switch the repository to before the pull |
 | `P_TRKORR` | If req.  | Transport request (required if system enforces it) |
 | `P_USER`   | No       | GitHub username (for private repos)                |
 | `P_TOKEN`  | No       | GitHub PAT (for private repos)                     |
@@ -79,12 +80,13 @@ Pulls (deserializes) a Git repository into SAP via the abapGit API.
 
 1. Finds the repository by an **exact** match on its name or its URL
 2. Sets GitHub credentials if provided (for private repo authentication)
-3. Runs `deserialize_checks()` to get required confirmations
-4. Verifies the user has a modifiable task in the given transport
-5. Auto-confirms all overwrite decisions (non-interactive mode)
-6. Calls `lo_repo->deserialize()` to pull
-7. Checks the deserialization log for errors
-8. Reports success or error via `MESSAGE`
+3. If `P_BRANCH` is given and differs from the selected branch: checks that the branch exists on the remote and selects it (see below)
+4. Runs `deserialize_checks()` to get required confirmations
+5. Verifies the user has a modifiable task in the given transport
+6. Auto-confirms all overwrite decisions (non-interactive mode)
+7. Calls `lo_repo->deserialize()` to pull
+8. Checks the deserialization log for errors
+9. Reports success or error via `MESSAGE`
 
 `P_REPO` matches **exactly** — on the repository name, or on its URL. **Both
 comparisons ignore case**, so there is no need to upper-case the input; the URL
@@ -118,7 +120,38 @@ commonly is.
 **Example OK-Code:**
 ```
 /nZ_ABAPGIT_PULL_MCP P_REPO=MY_REPO; P_TRKORR=DEVK900123;
+/nZ_ABAPGIT_PULL_MCP P_REPO=MY_REPO; P_BRANCH=feature/x; P_TRKORR=DEVK900123;
 ```
+
+#### Pulling another branch (`P_BRANCH`)
+
+`P_BRANCH` is optional.
+Without it the repository is pulled on its currently selected branch, exactly as before.
+
+With it, the report switches the repository to that branch before the pull, with abapGit's own `select_branch`.
+The name is normalised first:
+
+| Input             | Branch used            |
+| ----------------- | ---------------------- |
+| `main`            | `refs/heads/main`      |
+| `feature/x`       | `refs/heads/feature/x` |
+| `refs/heads/main` | `refs/heads/main`      |
+| empty or blanks   | no switch              |
+
+Nothing happens if the normalised branch is the one that is selected already.
+Otherwise the report fetches the branch list of the remote and checks that the branch is in it.
+abapGit's `select_branch` does not check that itself.
+An unknown branch ends the pull before anything is changed:
+
+```
+Branch not found: <value> (selected branch unchanged)
+```
+
+**The switch is persistent.**
+The repository stays on that branch afterwards, like after a branch switch in the abapGit UI, also when the pull fails or asks for a confirmation.
+A caller that needs the previous state switches back with a second call.
+A successful pull with `P_BRANCH` ends with `Pull successful: <repo> branch <full branch name>`.
+Without `P_BRANCH` the message is unchanged.
 
 ### LIST
 
@@ -203,6 +236,14 @@ in two ways on purpose: a pull that would touch local work answers
 objects that were deleted in Git, in the same order as the abapGit UI
 (delete, refresh, deserialize). The report never deletes.
 
+A pull takes an optional `branch` in the request body, with the same normalisation, the same persistent switch and the same check as `P_BRANCH`.
+An unknown branch is answered with `BRANCH_NOT_FOUND` (HTTP 404) and the selected branch stays unchanged.
+The pull result names the branch the repository is on, as `repo.branch`.
+
+```json
+{ "repo": "MY_REPO", "branch": "feature/x", "transport": "DEVK900123" }
+```
+
 A pull takes one `transport`. abapGit records objects in a workbench request
 and table content of a repository with a data configuration (customizing) in a
 separate customizing request. The endpoint takes the customizing request from
@@ -210,6 +251,15 @@ the abapGit repository setting "customizing request"; `transport` is used for
 it only when no workbench request is needed. A pull that needs both and has no
 customizing request in the repository setting is refused with
 `TRANSPORT_REQUIRED`, as is a customizing request of the wrong type.
+
+### Compatibility of the branch parameter
+
+| Client                        | Companion                | Result                                                       |
+| ----------------------------- | ------------------------ | ------------------------------------------------------------ |
+| old, sends no `branch`        | new                      | works as before; the result has an additional `repo.branch`  |
+| new, sends no `branch`        | old                      | works as before                                              |
+| new, sends `branch`           | old                      | error expected: the old companion does not know `branch`; if an old endpoint ignored it instead, the pull would run on the selected branch, so check `repo.branch` in the result |
+| new, sends `branch`           | new                      | the branch is switched and pulled                            |
 
 ### Git credentials: the `ZGIT_<SAP user>` destination
 

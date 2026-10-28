@@ -12,6 +12,7 @@ SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
   SELECTION-SCREEN COMMENT /1(60) gc_hint.     " Shows valid P_ACTION values
   PARAMETERS:
     p_repo   TYPE string LOWER CASE,           " Repository name (required for PULL)
+    p_branch TYPE string LOWER CASE,           " Branch to switch to before the pull (optional)
     p_trkorr TYPE trkorr.                       " Transport request (F4 available)
 SELECTION-SCREEN END OF BLOCK b1.
 
@@ -123,6 +124,15 @@ START-OF-SELECTION.
           iv_password = p_token ).
       ENDIF.
 
+      " Optional and persistent, like a switch in the abapGit UI. An unknown
+      " branch changes nothing. Without P_BRANCH the repository is not touched.
+      IF p_branch IS NOT INITIAL
+         AND zcl_abapgit_mcp_branch=>select( io_repo   = lo_repo
+                                             iv_branch = p_branch ) = abap_false.
+        MESSAGE e398(00) WITH 'Branch not found:' p_branch '(selected branch unchanged)' ''.
+        RETURN.
+      ENDIF.
+
       DATA(ls_checks) = lo_repo->deserialize_checks( ).
 
       IF ls_checks-transport-required = abap_true AND p_trkorr IS INITIAL.
@@ -175,7 +185,12 @@ START-OF-SELECTION.
         RETURN.
       ENDIF.
 
-      MESSAGE s398(00) WITH 'Pull successful:' lo_repo->get_name( ) '' ''.
+      IF p_branch IS INITIAL.
+        MESSAGE s398(00) WITH 'Pull successful:' lo_repo->get_name( ) '' ''.
+      ELSE.
+        " Only with P_BRANCH, so the message without it stays byte for byte the same
+        MESSAGE s398(00) WITH 'Pull successful:' lo_repo->get_name( ) 'branch' lo_repo->get_selected_branch( ).
+      ENDIF.
 
     CATCH cx_root INTO DATA(lx_error).
       MESSAGE e398(00) WITH lx_error->get_text( ) '' '' ''.

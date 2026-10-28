@@ -35,6 +35,12 @@
     </item>
     <item>
      <ID>S</ID>
+     <KEY>P_BRANCH</KEY>
+     <ENTRY>Branch (optional)</ENTRY>
+     <LENGTH>25</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
      <KEY>P_REPO</KEY>
      <ENTRY>Repository Name</ENTRY>
      <LENGTH>23</LENGTH>

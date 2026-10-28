@@ -13,6 +13,9 @@
           <str name="transport"><tt:value ref=".REQUEST.TRANSPORT"/></str>
         </tt:cond>
         <tt:cond frq="?">
+          <str name="branch"><tt:value ref=".REQUEST.BRANCH"/></str>
+        </tt:cond>
+        <tt:cond frq="?">
           <array name="confirm">
             <tt:loop ref=".REQUEST.CONFIRM">
               <object>
