@@ -10,6 +10,7 @@ CLASS ltcl_gateway_double DEFINITION FINAL FOR TESTING.
     DATA mv_select_calls TYPE i.
     DATA mv_commit_calls TYPE i.
     DATA mv_fail_select TYPE abap_bool.
+    DATA mv_fail_commit TYPE abap_bool.
 
 ENDCLASS.
 
@@ -35,6 +36,9 @@ CLASS ltcl_gateway_double IMPLEMENTATION.
 
 
   METHOD zif_abapgit_mcp_branch_gw~select_commit.
+    IF mv_fail_commit = abap_true.
+      zcx_abapgit_exception=>raise( `select commit failed` ).
+    ENDIF.
     mv_commit_calls = mv_commit_calls + 1.
     mv_commit = iv_commit.
   ENDMETHOD.
@@ -80,6 +84,8 @@ CLASS ltcl_branch DEFINITION FINAL FOR TESTING
     METHODS restore_is_noop_when_equal  FOR TESTING RAISING zcx_abapgit_exception.
     METHODS restore_failure_is_flagged  FOR TESTING RAISING zcx_abapgit_exception.
     METHODS restore_without_branch      FOR TESTING RAISING zcx_abapgit_exception.
+    METHODS restore_commit_fail_flagged FOR TESTING RAISING zcx_abapgit_exception.
+    METHODS restore_same_branch_new_pin FOR TESTING RAISING zcx_abapgit_exception.
 ENDCLASS.
 
 
@@ -308,6 +314,33 @@ CLASS ltcl_branch IMPLEMENTATION.
     cl_abap_unit_assert=>assert_true( zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
                                                                           iv_branch  = `` ) ).
     cl_abap_unit_assert=>assert_equals( exp = 0 act = lo_double->mv_select_calls ).
+  ENDMETHOD.
+
+  METHOD restore_commit_fail_flagged.
+    " select_commit fails after select_branch worked: flagged, never raised
+    DATA(lo_double) = NEW ltcl_gateway_double( ).
+    lo_double->mv_selected = `refs/heads/feature/x`.
+    lo_double->mv_fail_commit = abap_true.
+
+    cl_abap_unit_assert=>assert_false(
+      zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
+                                          iv_branch  = `refs/heads/main`
+                                          iv_commit  = `0123456789abcdef0123456789abcdef01234567` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = 0 act = lo_double->mv_commit_calls ).
+  ENDMETHOD.
+
+
+  METHOD restore_same_branch_new_pin.
+    " The branch matches, the commit differs: not a no-op, the pin is restored
+    DATA(lc_commit) = `0123456789abcdef0123456789abcdef01234567`.
+    DATA(lo_double) = NEW ltcl_gateway_double( ).
+    lo_double->mv_selected = `refs/heads/main`.
+
+    cl_abap_unit_assert=>assert_true( zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
+                                                                          iv_branch  = `refs/heads/main`
+                                                                          iv_commit  = lc_commit ) ).
+    cl_abap_unit_assert=>assert_equals( exp = lc_commit act = lo_double->mv_commit ).
+    cl_abap_unit_assert=>assert_equals( exp = 1 act = lo_double->mv_commit_calls ).
   ENDMETHOD.
 
 ENDCLASS.

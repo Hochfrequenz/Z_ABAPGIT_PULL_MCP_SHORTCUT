@@ -243,6 +243,8 @@ FORM restore_branch USING iv_reason TYPE string.
   IF zcl_abapgit_mcp_branch=>restore( io_repo   = lo_repo
                                       iv_branch = gv_prev_branch
                                       iv_commit = gv_prev_commit ) = abap_false.
-    MESSAGE e398(00) WITH 'Branch restore failed:' gv_prev_branch 'Cause:' iv_reason.
+    " MESSAGE fields are cut at 50 characters, so the full cause goes to the list
+    WRITE: / |Branch restore failed: { gv_prev_branch } Cause: { iv_reason }|.
+    MESSAGE e398(00) WITH 'Branch restore failed:' gv_prev_branch '(see log)' ''.
   ENDIF.
 ENDFORM.
