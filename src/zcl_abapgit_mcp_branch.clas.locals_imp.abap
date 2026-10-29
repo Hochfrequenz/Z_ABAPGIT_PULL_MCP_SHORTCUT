@@ -46,7 +46,8 @@ CLASS lcl_abapgit_gateway IMPLEMENTATION.
 
 
   METHOD zif_abapgit_mcp_branch_gw~select_commit.
-    mo_repo->select_commit( iv_commit ).
+    " abapGit types the parameter as a 40 character SHA-1 (C(40)), not as a string
+    mo_repo->select_commit( CONV #( iv_commit ) ).
   ENDMETHOD.
 
 ENDCLASS.
