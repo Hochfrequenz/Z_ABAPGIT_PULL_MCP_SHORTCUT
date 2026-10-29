@@ -490,6 +490,11 @@ CLASS ZCL_ABAPGIT_MCP_SYNC IMPLEMENTATION.
     TRY.
         " Persistent, like a switch in the abapGit UI: the repository stays on the branch.
         " An unknown branch changes nothing.
+        DATA(lv_branch_error) = zcl_abapgit_mcp_branch=>check( is_request-branch ).
+        IF lv_branch_error IS NOT INITIAL.
+          zcx_abapgit_mcp_sync=>raise( iv_code = zif_abapgit_mcp_sync=>c_error-bad_request
+                                       iv_text = lv_branch_error ).
+        ENDIF.
         IF is_request-branch IS NOT INITIAL
            AND zcl_abapgit_mcp_branch=>select( io_repo   = lo_repo
                                                iv_branch = is_request-branch ) = abap_false.

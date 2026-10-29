@@ -44,4 +44,9 @@ CLASS lcl_abapgit_gateway IMPLEMENTATION.
     mo_repo->select_branch( iv_branch ).
   ENDMETHOD.
 
+
+  METHOD zif_abapgit_mcp_branch_gw~select_commit.
+    mo_repo->select_commit( iv_commit ).
+  ENDMETHOD.
+
 ENDCLASS.

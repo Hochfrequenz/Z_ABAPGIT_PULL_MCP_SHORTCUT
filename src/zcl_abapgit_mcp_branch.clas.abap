@@ -23,7 +23,8 @@ CLASS zcl_abapgit_mcp_branch DEFINITION
     "! that is selected already. A branch that does not exist on the remote is
     "! reported by abap_false and leaves the selected branch unchanged;
     "! abapGit's own select_branch does not check that.
-    "! A failing request for the branch list of the remote is raised.
+    "! A failing request for the branch list of the remote is raised, and so is a
+    "! value that CHECK refuses.
     "! @parameter io_repo | online repository
     "! @parameter iv_branch | bare or full branch name
     "! @parameter rv_found | abap_true: the repository is on the branch afterwards
@@ -35,6 +36,38 @@ CLASS zcl_abapgit_mcp_branch DEFINITION
         VALUE(rv_found) TYPE abap_bool
       RAISING
         zcx_abapgit_exception.
+
+    "! Reason why a branch value is refused, empty when it is fine (an empty value
+    "! is fine: it means do not switch). Refused: HEAD, a leading slash, refs/ values
+    "! other than refs/heads/ and refs/heads/ without a name.
+    CLASS-METHODS check
+      IMPORTING
+        iv_branch       TYPE csequence
+      RETURNING
+        VALUE(rv_error) TYPE string.
+
+    "! Puts a repository back on a branch and commit remembered before SELECT.
+    "! Does nothing when it is there already. Never raises, so it cannot hide the
+    "! error that made the caller restore: abap_false means the restore failed.
+    "! @parameter io_repo | online repository
+    "! @parameter iv_branch | full branch name from before the switch
+    "! @parameter iv_commit | commit pin from before the switch, initial if none
+    CLASS-METHODS restore
+      IMPORTING
+        io_repo      TYPE REF TO zcl_abapgit_repo_online
+        iv_branch    TYPE csequence
+        iv_commit    TYPE csequence OPTIONAL
+      RETURNING
+        VALUE(rv_ok) TYPE abap_bool.
+
+    "! Same as RESTORE, for any implementation of the seam
+    CLASS-METHODS restore_in
+      IMPORTING
+        ii_gateway   TYPE REF TO zif_abapgit_mcp_branch_gw
+        iv_branch    TYPE csequence
+        iv_commit    TYPE csequence OPTIONAL
+      RETURNING
+        VALUE(rv_ok) TYPE abap_bool.
 
     "! Same as SELECT, for any implementation of the seam
     CLASS-METHODS select_in
@@ -49,6 +82,7 @@ CLASS zcl_abapgit_mcp_branch DEFINITION
   PRIVATE SECTION.
 
     CONSTANTS c_heads TYPE string VALUE `refs/heads/`.
+    CONSTANTS c_refs TYPE string VALUE `refs/`.
 
 ENDCLASS.
 
@@ -68,8 +102,66 @@ CLASS zcl_abapgit_mcp_branch IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD check.
+
+    DATA(lv_branch) = condense( CONV string( iv_branch ) ).
+    IF lv_branch IS INITIAL.
+      RETURN.
+    ENDIF.
+    IF lv_branch = `HEAD`.
+      rv_error = `Invalid branch: HEAD is not a branch name`.
+    ELSEIF lv_branch(1) = `/`.
+      rv_error = `Invalid branch: must not start with /`.
+    ELSEIF lv_branch = c_heads.
+      rv_error = `Invalid branch: name after refs/heads/ is missing`.
+    ELSEIF contains( val = lv_branch start = c_refs )
+        AND NOT contains( val = lv_branch start = c_heads ).
+      rv_error = `Invalid branch: only refs/heads/ is allowed`.
+    ENDIF.
+
+  ENDMETHOD.
+
+
+  METHOD restore.
+
+    rv_ok = restore_in( ii_gateway = NEW lcl_abapgit_gateway( io_repo )
+                        iv_branch  = iv_branch
+                        iv_commit  = iv_commit ).
+
+  ENDMETHOD.
+
+
+  METHOD restore_in.
+
+    IF iv_branch IS INITIAL.
+      rv_ok = abap_true.
+      RETURN.
+    ENDIF.
+    TRY.
+        IF ii_gateway->selected_branch( ) = iv_branch
+           AND ii_gateway->selected_commit( ) = iv_commit.
+          rv_ok = abap_true.
+          RETURN.
+        ENDIF.
+        " select_branch clears a pin, so the commit is pinned again afterwards
+        ii_gateway->select_branch( CONV #( iv_branch ) ).
+        IF iv_commit IS NOT INITIAL.
+          ii_gateway->select_commit( CONV #( iv_commit ) ).
+        ENDIF.
+        rv_ok = abap_true.
+      CATCH zcx_abapgit_exception.
+        rv_ok = abap_false.
+    ENDTRY.
+
+  ENDMETHOD.
+
+
   METHOD select.
 
+    DATA(lv_error) = check( iv_branch ).
+    IF lv_error IS NOT INITIAL.
+      zcx_abapgit_exception=>raise( lv_error ).
+    ENDIF.
     " Nothing to do, and no need to touch the repository, for an empty branch
     IF normalise( iv_branch ) IS INITIAL.
       rv_found = abap_true.
@@ -83,6 +175,10 @@ CLASS zcl_abapgit_mcp_branch IMPLEMENTATION.
 
   METHOD select_in.
 
+    DATA(lv_error) = check( iv_branch ).
+    IF lv_error IS NOT INITIAL.
+      zcx_abapgit_exception=>raise( lv_error ).
+    ENDIF.
     DATA(lv_branch) = normalise( iv_branch ).
     IF lv_branch IS INITIAL.
       rv_found = abap_true.

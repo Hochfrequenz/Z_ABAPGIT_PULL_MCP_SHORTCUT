@@ -71,7 +71,7 @@ Pulls (deserializes) a Git repository into SAP via the abapGit API.
 | ---------------------------- | ------------------------------------------------------------ |
 | `P_ACTION` | No       | `PULL` (default)                                  |
 | `P_REPO`   | Yes      | Exact repository name or URL (case-insensitive)   |
-| `P_BRANCH` | No       | Branch to switch the repository to before the pull |
+| `P_BRANCH` | No       | Branch to switch the repository to before the pull; kept only if the pull succeeds |
 | `P_TRKORR` | If req.  | Transport request (required if system enforces it) |
 | `P_USER`   | No       | GitHub username (for private repos)                |
 | `P_TOKEN`  | No       | GitHub PAT (for private repos)                     |
@@ -80,13 +80,13 @@ Pulls (deserializes) a Git repository into SAP via the abapGit API.
 
 1. Finds the repository by an **exact** match on its name or its URL
 2. Sets GitHub credentials if provided (for private repo authentication)
-3. If `P_BRANCH` is given and differs from the selected branch: checks that the branch exists on the remote and selects it (see below)
+3. If `P_BRANCH` is given and differs from the selected branch: checks the value, checks that the branch exists on the remote and selects it (see below)
 4. Runs `deserialize_checks()` to get required confirmations
 5. Verifies the user has a modifiable task in the given transport
 6. Auto-confirms all overwrite decisions (non-interactive mode)
 7. Calls `lo_repo->deserialize()` to pull
 8. Checks the deserialization log for errors
-9. Reports success or error via `MESSAGE`
+9. Reports success or error via `MESSAGE`; on any failure after the branch switch, restores the previous branch first
 
 `P_REPO` matches **exactly** — on the repository name, or on its URL. **Both
 comparisons ignore case**, so there is no need to upper-case the input; the URL
@@ -150,11 +150,30 @@ Branch not found: <value> (selected branch unchanged)
 If the branch list of the remote cannot be fetched (host, credentials), the report shows abapGit's error text, and the endpoint answers `INTERNAL`, like for every other abapGit failure.
 The selected branch stays unchanged then, too.
 
-**The switch is persistent.**
-The repository stays on that branch afterwards, like after a branch switch in the abapGit UI, also when the pull fails or asks for a confirmation.
-A caller that needs the previous state switches back with a second call.
-A successful pull with `P_BRANCH` ends with `Pull successful: <repo> branch <full branch name>`.
-Without `P_BRANCH` the message is unchanged.
+**Accepted values.**
+The report refuses, with a message that names the reason, `HEAD`, a value with a leading `/`, a `refs/` value other than `refs/heads/...`, and `refs/heads/` without a name.
+Nothing is changed then.
+The ADT endpoint answers `BAD_REQUEST` (HTTP 400) for them.
+
+**The switch lasts only if the pull succeeds.**
+After a successful pull the repository stays on the branch, like after a branch switch in the abapGit UI.
+The switch happens before the transport, task and deserialize checks, which depend on it.
+If one of them fails, or the pull itself fails, the report puts the repository back on the branch it had before, and on the commit it was pinned to, if any.
+If that restore fails too, the message is `Branch restore failed: <previous branch> Cause: <original error>`: the repository is then still on the new branch.
+The ADT endpoint does not restore (a pull that needs confirmation keeps the switch, so that the confirmed call pulls the same branch).
+
+**Echo of the branch.**
+With `P_BRANCH`, a successful pull writes a list line first and then sets the status:
+
+```
+BRANCH~refs/heads/feature/x
+Pull successful: branch=refs/heads/feature/x repo=MY_REPO
+```
+
+The echo names the branch the repository is on after the pull, not the value that was asked for.
+The status bar is cut at about 73 characters; read the `BRANCH~` list line when the branch name is long.
+A consumer that sent `P_BRANCH` must treat a missing or different echo as a failure, because an old report ignores the parameter and pulls on the selected branch.
+Without `P_BRANCH` the message is unchanged: `Pull successful: <repo>`, and no list line.
 
 ### LIST
 

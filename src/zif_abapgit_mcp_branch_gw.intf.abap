@@ -30,4 +30,11 @@ INTERFACE zif_abapgit_mcp_branch_gw PUBLIC.
     RAISING
       zcx_abapgit_exception.
 
+  "! Pins the repository to a commit again (used to restore a previous state)
+  METHODS select_commit
+    IMPORTING
+      iv_commit TYPE string
+    RAISING
+      zcx_abapgit_exception.
+
 ENDINTERFACE.
