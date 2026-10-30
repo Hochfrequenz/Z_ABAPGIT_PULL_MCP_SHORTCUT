@@ -12,6 +12,7 @@ SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
   SELECTION-SCREEN COMMENT /1(60) gc_hint.     " Shows valid P_ACTION values
   PARAMETERS:
     p_repo   TYPE string LOWER CASE,           " Repository name (required for PULL)
+    p_branch TYPE string LOWER CASE,           " Branch to switch to before the pull (optional)
     p_trkorr TYPE trkorr.                       " Transport request (F4 available)
 SELECTION-SCREEN END OF BLOCK b1.
 
@@ -20,6 +21,12 @@ SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
     p_user  TYPE string LOWER CASE,             " GitHub username
     p_token TYPE string LOWER CASE.              " GitHub PAT (Personal Access Token)
 SELECTION-SCREEN END OF BLOCK b2.
+
+* State before the P_BRANCH switch. gv_switched = abap_true means: put the
+* repository back on every failure after this point (see restore_branch).
+DATA: gv_switched    TYPE abap_bool,
+      gv_prev_branch TYPE string,
+      gv_prev_commit TYPE string.
 
 INITIALIZATION.
   gc_hint = 'Valid actions: PULL (pull repo) | LIST (list all repos)'.
@@ -123,9 +130,28 @@ START-OF-SELECTION.
           iv_password = p_token ).
       ENDIF.
 
+      " Optional and persistent, like a switch in the abapGit UI. An unknown
+      " branch changes nothing. Without P_BRANCH the repository is not touched.
+      " The previous branch and pin are remembered first: every failure from here
+      " on puts the repository back (PERFORM restore_branch), so a pull that did
+      " not happen does not leave the repository on another branch. The switch
+      " itself must stay before deserialize_checks( ), which depend on it.
+      IF p_branch IS NOT INITIAL.
+        gv_prev_branch = lo_repo->get_selected_branch( ).
+        gv_prev_commit = lo_repo->get_selected_commit( ).
+        gv_switched    = abap_true.
+      ENDIF.
+      IF p_branch IS NOT INITIAL
+         AND zcl_abapgit_mcp_branch=>select( io_repo   = lo_repo
+                                             iv_branch = p_branch ) = abap_false.
+        MESSAGE e398(00) WITH 'Branch not found:' p_branch '(selected branch unchanged)' ''.
+        RETURN.
+      ENDIF.
+
       DATA(ls_checks) = lo_repo->deserialize_checks( ).
 
       IF ls_checks-transport-required = abap_true AND p_trkorr IS INITIAL.
+        PERFORM restore_branch USING `Transport required`.
         MESSAGE e398(00) WITH 'Transport required. Provide P_TRKORR=' ls_checks-transport-type '' ''.
         RETURN.
       ENDIF.
@@ -139,6 +165,7 @@ START-OF-SELECTION.
             AND as4user  = @sy-uname
             AND trstatus = 'D'.               " D = modifiable
         IF sy-subrc <> 0.
+          PERFORM restore_branch USING `No modifiable task`.
           MESSAGE e398(00) WITH 'User' sy-uname 'has no modifiable task in' p_trkorr.
           RETURN.
         ENDIF.
@@ -168,15 +195,82 @@ START-OF-SELECTION.
         DATA(lt_msgs) = lo_log->get_messages( ).
         IF lines( lt_msgs ) > 0.
           DATA(lv_msg) = lt_msgs[ 1 ]-text.
+          PERFORM restore_branch USING lv_msg.
           MESSAGE e398(00) WITH 'Pull log:' lv_msg '' ''.
         ELSE.
+          PERFORM restore_branch USING `Deserialization log has issues`.
           MESSAGE e398(00) WITH 'Pull failed: deserialization log has issues' '' '' ''.
         ENDIF.
         RETURN.
       ENDIF.
 
-      MESSAGE s398(00) WITH 'Pull successful:' lo_repo->get_name( ) '' ''.
+      IF p_branch IS INITIAL.
+        MESSAGE s398(00) WITH 'Pull successful:' lo_repo->get_name( ) '' ''.
+      ELSE.
+        " Only with P_BRANCH, so the message without it stays byte for byte the same.
+        " The status bar is cut at about 73 characters, so the branch is also
+        " written as a list line, which a consumer can read in full:
+        "   BRANCH~<full ref>
+        " The echo is what the repository is on, not what was asked for. A
+        " consumer treats a missing or different echo as a failure.
+        DATA(lv_branch_now) = lo_repo->get_selected_branch( ).
+        DATA(lv_status_branch) = |Pull successful: branch={ lv_branch_now }|.
+        DATA(lv_status_repo) = |repo={ lo_repo->get_name( ) }|.
+        WRITE: / |BRANCH~{ lv_branch_now }|.
+        MESSAGE s398(00) WITH lv_status_branch lv_status_repo '' ''.
+      ENDIF.
 
     CATCH cx_root INTO DATA(lx_error).
+      DATA(lv_cause) = lx_error->get_text( ).
+      PERFORM restore_branch USING lv_cause.
       MESSAGE e398(00) WITH lx_error->get_text( ) '' '' ''.
   ENDTRY.
+
+*&---------------------------------------------------------------------*
+*& Puts the repository back on the branch and pin it had before the
+*& P_BRANCH switch. Does nothing without a switch and when the repository
+*& is there already. Never raises: the failure that made it run is what
+*& gets reported - except when the restore itself fails: then the repository
+*& is left on the new branch, which matters more, and the message says so
+*& and names the original cause, all in the message text. (An information message would open a popup
+*& that blocks an unattended consumer.)
+*&---------------------------------------------------------------------*
+FORM restore_branch USING iv_reason TYPE string.
+  IF gv_switched = abap_false OR lo_repo IS NOT BOUND.
+    RETURN.
+  ENDIF.
+  gv_switched = abap_false.
+  DATA(lv_failed) = zcl_abapgit_mcp_branch=>restore( io_repo   = lo_repo
+                                                     iv_branch = gv_prev_branch
+                                                     iv_commit = gv_prev_commit ).
+  IF lv_failed IS NOT INITIAL.
+    " Everything goes into the message: an error message in START-OF-SELECTION
+    " ends the report and discards the list, so a WRITE would never be seen.
+    " The status bar shows about 73 characters, so the essential part comes
+    " first: what failed and the branch it was on, then the error of the pull
+    " (the restore error itself does not fit). Four fields of 50 characters:
+    "   Branch restore failed: was <previous branch>; <original error>
+    " or, when only the commit pin could not be set again:
+    "   Pin restore failed: was <previous branch>; <original error>
+    DATA(lv_f1) = COND string( WHEN lv_failed = zcl_abapgit_mcp_branch=>c_restore_failed-pin
+                               THEN `Pin restore failed:`
+                               ELSE `Branch restore failed:` ).
+    DATA(lv_f2) = |was { gv_prev_branch };|.
+    lv_f2 = substring( val = lv_f2 len = nmin( val1 = strlen( lv_f2 ) val2 = 50 ) ).
+    DATA(lv_len) = strlen( iv_reason ).
+    DATA(lv_cut) = nmin( val1 = lv_len val2 = 50 ).
+    IF lv_len > 50.
+      " cut at a blank, so that the join of the fields does not split a word
+      DATA(lv_blank) = find( val = substring( val = iv_reason len = 50 ) sub = ` ` occ = -1 ).
+      IF lv_blank >= 20.
+        lv_cut = lv_blank + 1.
+      ENDIF.
+    ENDIF.
+    DATA(lv_f3) = substring( val = iv_reason len = lv_cut ).
+    DATA(lv_f4) = ``.
+    IF lv_len > lv_cut.
+      lv_f4 = substring( val = iv_reason off = lv_cut len = nmin( val1 = lv_len - lv_cut val2 = 50 ) ).
+    ENDIF.
+    MESSAGE e398(00) WITH lv_f1 lv_f2 lv_f3 lv_f4.
+  ENDIF.
+ENDFORM.

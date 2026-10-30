@@ -20,6 +20,7 @@ CLASS ltcl_status_mapping IMPLEMENTATION.
     lt_cases = VALUE #(
       ( code = zif_abapgit_mcp_sync=>c_error-repo_not_found       status = 404 )
       ( code = zif_abapgit_mcp_sync=>c_error-repo_ambiguous       status = 409 )
+      ( code = zif_abapgit_mcp_sync=>c_error-branch_not_found     status = 404 )
       ( code = zif_abapgit_mcp_sync=>c_error-object_not_in_repo   status = 422 )
       ( code = zif_abapgit_mcp_sync=>c_error-credentials_missing  status = 422 )
       ( code = zif_abapgit_mcp_sync=>c_error-credentials_rejected status = 422 )

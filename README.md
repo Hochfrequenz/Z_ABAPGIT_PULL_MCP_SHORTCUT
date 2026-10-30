@@ -71,6 +71,7 @@ Pulls (deserializes) a Git repository into SAP via the abapGit API.
 | ---------------------------- | ------------------------------------------------------------ |
 | `P_ACTION` | No       | `PULL` (default)                                  |
 | `P_REPO`   | Yes      | Exact repository name or URL (case-insensitive)   |
+| `P_BRANCH` | No       | Branch to switch the repository to before the pull; kept only if the pull succeeds |
 | `P_TRKORR` | If req.  | Transport request (required if system enforces it) |
 | `P_USER`   | No       | GitHub username (for private repos)                |
 | `P_TOKEN`  | No       | GitHub PAT (for private repos)                     |
@@ -79,12 +80,13 @@ Pulls (deserializes) a Git repository into SAP via the abapGit API.
 
 1. Finds the repository by an **exact** match on its name or its URL
 2. Sets GitHub credentials if provided (for private repo authentication)
-3. Runs `deserialize_checks()` to get required confirmations
-4. Verifies the user has a modifiable task in the given transport
-5. Auto-confirms all overwrite decisions (non-interactive mode)
-6. Calls `lo_repo->deserialize()` to pull
-7. Checks the deserialization log for errors
-8. Reports success or error via `MESSAGE`
+3. If `P_BRANCH` is given and differs from the selected branch: checks the value, checks that the branch exists on the remote and selects it (see below)
+4. Runs `deserialize_checks()` to get required confirmations
+5. Verifies the user has a modifiable task in the given transport
+6. Auto-confirms all overwrite decisions (non-interactive mode)
+7. Calls `lo_repo->deserialize()` to pull
+8. Checks the deserialization log for errors
+9. Reports success or error via `MESSAGE`; on any failure after the branch switch, restores the previous branch first
 
 `P_REPO` matches **exactly** — on the repository name, or on its URL. **Both
 comparisons ignore case**, so there is no need to upper-case the input; the URL
@@ -118,7 +120,62 @@ commonly is.
 **Example OK-Code:**
 ```
 /nZ_ABAPGIT_PULL_MCP P_REPO=MY_REPO; P_TRKORR=DEVK900123;
+/nZ_ABAPGIT_PULL_MCP P_REPO=MY_REPO; P_BRANCH=feature/x; P_TRKORR=DEVK900123;
 ```
+
+#### Pulling another branch (`P_BRANCH`)
+
+`P_BRANCH` is optional.
+Without it the repository is pulled on its currently selected branch, exactly as before.
+
+With it, the report switches the repository to that branch before the pull, with abapGit's own `select_branch`.
+The name is normalised first:
+
+| Input             | Branch used            |
+| ----------------- | ---------------------- |
+| `main`            | `refs/heads/main`      |
+| `feature/x`       | `refs/heads/feature/x` |
+| `refs/heads/main` | `refs/heads/main`      |
+| empty or blanks   | no switch (the pull runs on the selected branch; the missing `BRANCH~` echo shows that nothing was switched) |
+
+Nothing happens if the normalised branch is the one that is selected already, unless the repository is pinned to a commit: then the branch is selected again, which clears the pin.
+Otherwise the report fetches the branch list of the remote and checks that the branch is in it.
+abapGit's `select_branch` does not check that itself.
+An unknown branch ends the pull before anything is changed:
+
+```
+Branch not found: <value> (selected branch unchanged)
+```
+
+If the branch list of the remote cannot be fetched (host, credentials), the report shows abapGit's error text, and the endpoint answers `INTERNAL`, like for every other abapGit failure.
+The selected branch stays unchanged then, too.
+
+**Accepted values.**
+The report refuses, with a message that names the reason, `HEAD`, a value with a leading `/`, a `refs/` value other than `refs/heads/...`, `refs/heads/` without a name, and a value that contains blanks or a semicolon (the OK-code parameter parser splits on `;`).
+Nothing is changed then.
+The ADT endpoint answers `BAD_REQUEST` (HTTP 400) for them, before it looks up the repository or contacts the remote.
+
+**The switch lasts only if the pull succeeds.**
+After a successful pull the repository stays on the branch, like after a branch switch in the abapGit UI.
+If the repository is pinned to a commit, a successful pull with `P_BRANCH` clears the pin (selecting a branch always does), even when the branch is the one already selected. A repository that is not pinned is not affected.
+The switch happens before the transport, task and deserialize checks, which depend on it.
+If one of them fails, or the pull itself fails, the report puts the repository back on the branch it had before, and on the commit it was pinned to, if any.
+If that restore fails too, the repository is still on the new branch. The message names what failed and the error of the pull, as far as the four message fields of 50 characters allow (about 100 characters; the error of the restore itself is not shown), then the branch it was on: `Branch restore failed: was <previous branch>; <original error>`. If the branch is back and only pinning the commit again failed, it starts with `Pin restore failed:` instead. An error message ends the report and discards the list, so nothing is written to it.
+The restore only resets the branch pointer (and the pin): if the failed pull had already written objects, their local objects and checksums stay as the new branch left them, so abapGit may show differences afterwards.
+The ADT endpoint restores in the same way on every error it answers after the switch (`TRANSPORT_REQUIRED`, `REQUIREMENTS_NOT_MET`, undecidable file states, `INTERNAL`, ...). Only `needs_confirmation` keeps the switch, so that the confirmed call pulls the same branch. If its restore fails, the error keeps its code and gets a detail line `Branch restore failed: ...` or `Pin restore failed: ...`.
+
+**Echo of the branch.**
+With `P_BRANCH`, a successful pull writes a list line first and then sets the status:
+
+```
+BRANCH~refs/heads/feature/x
+Pull successful: branch=refs/heads/feature/x repo=MY_REPO
+```
+
+The echo names the branch the repository is on after the pull, not the value that was asked for.
+The status bar is cut at about 73 characters; read the `BRANCH~` list line when the branch name is long.
+A consumer that sent `P_BRANCH` must treat a missing or different echo as a failure, because an old report ignores the parameter and pulls on the selected branch.
+Without `P_BRANCH` the message is unchanged: `Pull successful: <repo>`, and no list line.
 
 ### LIST
 
@@ -203,6 +260,14 @@ in two ways on purpose: a pull that would touch local work answers
 objects that were deleted in Git, in the same order as the abapGit UI
 (delete, refresh, deserialize). The report never deletes.
 
+A pull takes an optional `branch` in the request body, with the same normalisation, the same persistent switch and the same check as `P_BRANCH`.
+An unknown branch is answered with `BRANCH_NOT_FOUND` (HTTP 404) and the selected branch stays unchanged.
+The pull result names the branch the repository is on, as `repo.branch`.
+
+```json
+{ "repo": "MY_REPO", "branch": "feature/x", "transport": "DEVK900123" }
+```
+
 A pull takes one `transport`. abapGit records objects in a workbench request
 and table content of a repository with a data configuration (customizing) in a
 separate customizing request. The endpoint takes the customizing request from
@@ -210,6 +275,15 @@ the abapGit repository setting "customizing request"; `transport` is used for
 it only when no workbench request is needed. A pull that needs both and has no
 customizing request in the repository setting is refused with
 `TRANSPORT_REQUIRED`, as is a customizing request of the wrong type.
+
+### Compatibility of the branch parameter
+
+| Client                        | Companion                | Result                                                       |
+| ----------------------------- | ------------------------ | ------------------------------------------------------------ |
+| old, sends no `branch`        | new                      | works as before; the result has an additional `repo.branch`  |
+| new, sends no `branch`        | old                      | works as before                                              |
+| new, sends `branch`           | old                      | error expected: the old companion does not know `branch`; if an old endpoint ignored it instead, the pull would run on the selected branch, so treat an empty or missing `repo.branch` in the result as an old companion |
+| new, sends `branch`           | new                      | the branch is switched and pulled                            |
 
 ### Git credentials: the `ZGIT_<SAP user>` destination
 

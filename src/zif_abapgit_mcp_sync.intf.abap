@@ -37,6 +37,7 @@ INTERFACE zif_abapgit_mcp_sync PUBLIC.
       repo      TYPE string,
       transport TYPE string,
       confirm   TYPE ty_confirmations,
+      branch    TYPE string,
     END OF ty_pull_request.
 
   TYPES:
@@ -71,6 +72,7 @@ INTERFACE zif_abapgit_mcp_sync PUBLIC.
       name    TYPE string,
       url     TYPE string,
       package TYPE string,
+      branch  TYPE string,
     END OF ty_repo_ref.
 
   TYPES:
@@ -144,6 +146,7 @@ INTERFACE zif_abapgit_mcp_sync PUBLIC.
     BEGIN OF c_error,
       repo_not_found       TYPE string VALUE `REPO_NOT_FOUND`,
       repo_ambiguous       TYPE string VALUE `REPO_AMBIGUOUS`,
+      branch_not_found     TYPE string VALUE `BRANCH_NOT_FOUND`,
       object_not_in_repo   TYPE string VALUE `OBJECT_NOT_IN_REPO`,
       credentials_missing  TYPE string VALUE `CREDENTIALS_MISSING`,
       credentials_rejected TYPE string VALUE `CREDENTIALS_REJECTED`,

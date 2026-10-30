@@ -113,13 +113,13 @@ CLASS ltcl_json IMPLEMENTATION.
 
   METHOD pull_result_with_files.
     cl_abap_unit_assert=>assert_equals(
-      exp = `{"status":"needs_confirmation","repo":{"name":"example","url":"u","package":"ZEXAMPLE"},` &&
+      exp = `{"status":"needs_confirmation","repo":{"name":"example","url":"u","package":"ZEXAMPLE","branch":"refs/heads/main"},` &&
             `"confirmations_required":[{"obj_type":"CLAS","obj_name":"ZCL_EXAMPLE","action":"delete",` &&
             `"text":"Delete local object","files":[{"path":"/src/","filename":"zcl_example.clas.abap","state":"MD"}]}],` &&
             `"log":[]}`
       act = zcl_abapgit_mcp_json=>pull_result_to_json( VALUE #(
               status = zif_abapgit_mcp_sync=>c_status-needs_confirmation
-              repo   = VALUE #( name = `example` url = `u` package = `ZEXAMPLE` )
+              repo   = VALUE #( name = `example` url = `u` package = `ZEXAMPLE` branch = `refs/heads/main` )
               confirmations_required = VALUE #(
                 ( obj_type = `CLAS` obj_name = `ZCL_EXAMPLE` action = `delete` text = `Delete local object`
                   files = VALUE #( ( path = `/src/` filename = `zcl_example.clas.abap` state = `MD` ) ) ) ) ) ) ).

@@ -10,6 +10,7 @@
         <str name="name"><tt:value ref=".RESULT.REPO.NAME"/></str>
         <str name="url"><tt:value ref=".RESULT.REPO.URL"/></str>
         <str name="package"><tt:value ref=".RESULT.REPO.PACKAGE"/></str>
+        <str name="branch"><tt:value ref=".RESULT.REPO.BRANCH"/></str>
       </object>
       <array name="confirmations_required">
         <tt:loop ref=".RESULT.CONFIRMATIONS_REQUIRED">
