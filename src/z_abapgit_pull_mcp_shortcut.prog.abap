@@ -11,7 +11,8 @@ SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
     p_action TYPE c LENGTH 4 DEFAULT 'PULL'.  " Action: PULL = pull repo, LIST = list all repos
   SELECTION-SCREEN COMMENT /1(60) gc_hint.     " Shows valid P_ACTION values
   PARAMETERS:
-    p_repo   TYPE string LOWER CASE,           " Repository name (required for PULL)
+    p_repo   TYPE string LOWER CASE,           " Repository name or URL (PULL: this or P_KEY)
+    p_key    TYPE string LOWER CASE,           " abapGit repository key (PULL: this or P_REPO)
     p_branch TYPE string LOWER CASE,           " Branch to switch to before the pull (optional)
     p_trkorr TYPE trkorr.                       " Transport request (F4 available)
 SELECTION-SCREEN END OF BLOCK b1.
@@ -81,9 +82,15 @@ START-OF-SELECTION.
     RETURN.
   ENDIF.
 
-* --- PULL mode (existing logic, unchanged) ---
-  IF p_repo IS INITIAL.
-    MESSAGE e398(00) WITH 'P_REPO is required for PULL action' '' '' ''.
+* --- PULL mode ---
+  " Exactly one selector: P_REPO (name or URL) or P_KEY (abapGit key). Never
+  " both, even if they agree, and never a guess. A key is a string on purpose:
+  " a c(12) parameter would cut a 13-digit input to 12 digits and bind another
+  " repository.
+  DATA(lv_selector_error) = zcl_abapgit_mcp_repo_match=>check_selector( iv_repo = p_repo
+                                                                        iv_key  = p_key ).
+  IF lv_selector_error IS NOT INITIAL.
+    MESSAGE e398(00) WITH lv_selector_error '' '' ''.
     RETURN.
   ENDIF.
 
@@ -103,26 +110,39 @@ START-OF-SELECTION.
       " the ADT endpoints under /sap/bc/adt/abapgitsync/ resolve a
       " repository the same way: name (case-insensitive) or URL without a
       " trailing slash and .git suffix, online repositories only.
-      DATA(lt_hits) = zcl_abapgit_mcp_repo_match=>find_online_repos( p_repo ).
+      IF condense( p_key ) IS NOT INITIAL.
+        " By key: unique by construction, so there is no ambiguity case.
+        " The key is normalised (trimmed, padded to 12 digits); check_selector
+        " has accepted it above.
+        DATA(lv_key) = zcl_abapgit_mcp_repo_match=>normalise_key( p_key ).
+        lo_repo = zcl_abapgit_mcp_repo_match=>find_online_repo_by_key( lv_key ).
+        IF lo_repo IS NOT BOUND.
+          DATA(lv_key_text) = |key { lv_key }|.
+          MESSAGE e398(00) WITH 'Repository not found:' lv_key_text '(online only)' ''.
+          RETURN.
+        ENDIF.
+      ELSE.
+        DATA(lt_hits) = zcl_abapgit_mcp_repo_match=>find_online_repos( p_repo ).
 
-      IF lines( lt_hits ) = 0.
-        " Kept short on purpose: the status bar cuts at about 73
-        " characters, and this is what the MCP consumer reads.
-        MESSAGE e398(00) WITH 'Repository not found:' p_repo
-                              '(exact name/URL, online only)' ''.
-        RETURN.
+        IF lines( lt_hits ) = 0.
+          " Kept short on purpose: the status bar cuts at about 73
+          " characters, and this is what the MCP consumer reads.
+          MESSAGE e398(00) WITH 'Repository not found:' p_repo
+                                '(exact name/URL, online only)' ''.
+          RETURN.
+        ENDIF.
+
+        IF lines( lt_hits ) > 1.
+          " Two repos may share a name, and abapGit permits the same
+          " URL to be registered twice against different packages - so
+          " neither comparand is guaranteed unique on its own.
+          DATA(lv_hits) = |{ lines( lt_hits ) }|.
+          MESSAGE e398(00) WITH 'P_REPO is ambiguous:' p_repo 'matches' lv_hits.
+          RETURN.
+        ENDIF.
+
+        lo_repo = lt_hits[ 1 ].
       ENDIF.
-
-      IF lines( lt_hits ) > 1.
-        " Two repos may share a name, and abapGit permits the same
-        " URL to be registered twice against different packages - so
-        " neither comparand is guaranteed unique on its own.
-        DATA(lv_hits) = |{ lines( lt_hits ) }|.
-        MESSAGE e398(00) WITH 'P_REPO is ambiguous:' p_repo 'matches' lv_hits.
-        RETURN.
-      ENDIF.
-
-      lo_repo = lt_hits[ 1 ].
 
       IF p_user IS NOT INITIAL AND p_token IS NOT INITIAL.
         zcl_abapgit_login_manager=>set(
