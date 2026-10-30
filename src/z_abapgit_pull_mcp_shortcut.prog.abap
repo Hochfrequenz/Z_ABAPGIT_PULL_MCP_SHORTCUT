@@ -94,6 +94,10 @@ START-OF-SELECTION.
     RETURN.
   ENDIF.
 
+  " Trimmed and padded to 12 digits; check_selector has accepted it. Empty if
+  " P_KEY is empty (or blank), then P_REPO selects.
+  DATA(lv_key) = zcl_abapgit_mcp_repo_match=>normalise_key( p_key ).
+
   TRY.
       DATA lo_repo TYPE REF TO zcl_abapgit_repo_online.
 
@@ -110,11 +114,8 @@ START-OF-SELECTION.
       " the ADT endpoints under /sap/bc/adt/abapgitsync/ resolve a
       " repository the same way: name (case-insensitive) or URL without a
       " trailing slash and .git suffix, online repositories only.
-      IF condense( p_key ) IS NOT INITIAL.
+      IF lv_key IS NOT INITIAL.
         " By key: unique by construction, so there is no ambiguity case.
-        " The key is normalised (trimmed, padded to 12 digits); check_selector
-        " has accepted it above.
-        DATA(lv_key) = zcl_abapgit_mcp_repo_match=>normalise_key( p_key ).
         lo_repo = zcl_abapgit_mcp_repo_match=>find_online_repo_by_key( lv_key ).
         IF lo_repo IS NOT BOUND.
           DATA(lv_key_text) = |key { lv_key }|.
