@@ -86,6 +86,7 @@ CLASS ZCX_ABAPGIT_MCP_SYNC IMPLEMENTATION.
       WHEN zif_abapgit_mcp_sync=>c_error-transport_required   THEN 422
       WHEN zif_abapgit_mcp_sync=>c_error-no_modifiable_task   THEN 422
       WHEN zif_abapgit_mcp_sync=>c_error-requirements_not_met THEN 422
+      WHEN zif_abapgit_mcp_sync=>c_error-repo_write_protected THEN 422
       WHEN zif_abapgit_mcp_sync=>c_error-git_error            THEN 424
       WHEN zif_abapgit_mcp_sync=>c_error-bad_request          THEN 400
       ELSE 500 ).

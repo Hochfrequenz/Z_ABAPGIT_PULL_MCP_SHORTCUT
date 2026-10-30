@@ -490,6 +490,11 @@ CLASS ZCL_ABAPGIT_MCP_SYNC IMPLEMENTATION.
     ENDIF.
 
     DATA(lo_repo) = resolve_repo( is_request-repo ).
+    " Before anything that can write: every set( ) of the repository (branch switch,
+    " .abapgit.xml in calculate/deserialize_checks) would persist the flag that
+    " abapGit forces in a client without repository changes.
+    zcl_abapgit_mcp_guard=>refuse_write_protected( lo_repo->get_local_settings( )-write_protected ).
+
     rs_result-repo = VALUE #( name    = lo_repo->get_name( )
                               url     = lo_repo->get_url( )
                               package = lo_repo->get_package( ) ).

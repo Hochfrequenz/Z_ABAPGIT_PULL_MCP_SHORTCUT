@@ -82,6 +82,7 @@ Pulls (deserializes) a Git repository into SAP via the abapGit API.
 **What it does:**
 
 1. Finds the repository by an **exact** match on its name or its URL, or by its key (`P_KEY`)
+1a. Refuses a write-protected repository (see below), before anything is changed
 2. Sets GitHub credentials if provided (for private repo authentication)
 3. If `P_BRANCH` is given and differs from the selected branch: checks the value, checks that the branch exists on the remote and selects it (see below)
 4. Runs `deserialize_checks()` to get required confirmations
@@ -90,6 +91,12 @@ Pulls (deserializes) a Git repository into SAP via the abapGit API.
 7. Calls `lo_repo->deserialize()` to pull
 8. Checks the deserialization log for errors
 9. Reports success or error via `MESSAGE`; on any failure after the branch switch, restores the previous branch first
+
+**Write-protected repositories.**
+If the repository's local setting "Write Protected" is set, the pull stops right after the repository is found, before any branch switch or other abapGit call that can write, with
+`Pull refused: repository is write-protected` and `(client/system may not allow changes)`.
+Nothing is changed, so there is nothing to restore. The ADT endpoint answers `REPO_WRITE_PROTECTED` (HTTP 422), with the text `Repository is write-protected (a local setting, or this client/system does not allow repository changes); pull refused, repository unchanged`.
+The reason for the check: in a client (or system) that does not allow changes to repository objects, abapGit forces the write protection in memory, and its next write of the repository record (a branch switch, or reading `.abapgit.xml` during the pull checks) stores that flag permanently. Afterwards every pull of the repository fails in every client with `Cannot deserialize. Local code is write-protected by repo config`, until someone unticks **Write Protected** in the abapGit local settings. So **run pulls in a client that allows repository changes**. The guard also refuses a repository that a user write-protected, as the pull would have failed anyway. Push and LIST are not guarded.
 
 `P_REPO` matches **exactly** — on the repository name, or on its URL. **Both
 comparisons ignore case**, so there is no need to upper-case the input; the URL
@@ -318,6 +325,8 @@ objects that were deleted in Git, in the same order as the abapGit UI
 A pull takes an optional `branch` in the request body, with the same normalisation, the same persistent switch and the same check as `P_BRANCH`.
 An unknown branch is answered with `BRANCH_NOT_FOUND` (HTTP 404) and the selected branch stays unchanged.
 The pull result names the branch the repository is on, as `repo.branch`.
+
+A pull of a write-protected repository is refused with `REPO_WRITE_PROTECTED` (HTTP 422) right after the repository is found, before anything is changed (see "Write-protected repositories" above).
 
 ```json
 { "repo": "MY_REPO", "branch": "feature/x", "transport": "DEVK900123" }

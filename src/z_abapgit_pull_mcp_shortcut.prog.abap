@@ -145,6 +145,16 @@ START-OF-SELECTION.
         lo_repo = lt_hits[ 1 ].
       ENDIF.
 
+      " Before anything that can write: every set( ) of the repository (branch
+      " switch, .abapgit.xml in deserialize_checks) would persist the write
+      " protection that abapGit forces in a client without repository changes,
+      " for every client. Same condition as abapGit's check_write_protect.
+      IF lo_repo->get_local_settings( )-write_protected = abap_true.
+        MESSAGE e398(00) WITH 'Pull refused: repository is write-protected'
+                              '(client/system may not allow changes)' '' ''.
+        RETURN.
+      ENDIF.
+
       IF p_user IS NOT INITIAL AND p_token IS NOT INITIAL.
         zcl_abapgit_login_manager=>set(
           iv_uri      = lo_repo->get_url( )

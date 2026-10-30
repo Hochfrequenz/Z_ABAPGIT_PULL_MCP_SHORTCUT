@@ -153,6 +153,7 @@ INTERFACE zif_abapgit_mcp_sync PUBLIC.
       transport_required   TYPE string VALUE `TRANSPORT_REQUIRED`,
       no_modifiable_task   TYPE string VALUE `NO_MODIFIABLE_TASK`,
       requirements_not_met TYPE string VALUE `REQUIREMENTS_NOT_MET`,
+      repo_write_protected TYPE string VALUE `REPO_WRITE_PROTECTED`,
       remote_changed       TYPE string VALUE `REMOTE_CHANGED`,
       git_error            TYPE string VALUE `GIT_ERROR`,
       bad_request          TYPE string VALUE `BAD_REQUEST`,

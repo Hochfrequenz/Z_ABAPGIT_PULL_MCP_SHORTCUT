@@ -113,6 +113,21 @@ CLASS zcl_abapgit_mcp_guard DEFINITION
       RAISING
         zcx_abapgit_mcp_sync.
 
+    "! Pull rule, evaluated right after the repository is resolved and before
+    "! anything that can write: a repository whose local setting "write protected"
+    "! is set is refused. The flag is the one abapGit's own check_write_protect
+    "! evaluates. It is true for a flag a user set and for the transient flag
+    "! abapGit forces in a client or system that does not allow repository
+    "! changes. Any set( ) of the repository (branch switch, .abapgit.xml) would
+    "! persist the forced flag for every client, so nothing may run before this.
+    "! @parameter iv_write_protected | lo_repo->get_local_settings( )-write_protected
+    "! @raising zcx_abapgit_mcp_sync | REPO_WRITE_PROTECTED
+    CLASS-METHODS refuse_write_protected
+      IMPORTING
+        iv_write_protected TYPE abap_bool
+      RAISING
+        zcx_abapgit_mcp_sync.
+
   PRIVATE SECTION.
 
     CLASS-METHODS files_of_object
@@ -249,6 +264,15 @@ CLASS ZCL_ABAPGIT_MCP_GUARD IMPLEMENTATION.
                          OR lv_state = `A_` OR lv_state = `_D` OR lv_state = `MD` OR lv_state = `M_`
                          OR lv_state = `MM` OR lv_state = `_M` ).
 
+  ENDMETHOD.
+
+
+  METHOD refuse_write_protected.
+    IF iv_write_protected = abap_true.
+      zcx_abapgit_mcp_sync=>raise(
+        iv_code = zif_abapgit_mcp_sync=>c_error-repo_write_protected
+        iv_text = `Repository is write-protected (a local setting, or this client/system does not allow repository changes); pull refused, repository unchanged` ).
+    ENDIF.
   ENDMETHOD.
 
 
