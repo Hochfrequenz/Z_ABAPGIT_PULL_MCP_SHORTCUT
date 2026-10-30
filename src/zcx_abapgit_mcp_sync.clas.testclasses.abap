@@ -27,6 +27,7 @@ CLASS ltcl_status_mapping IMPLEMENTATION.
       ( code = zif_abapgit_mcp_sync=>c_error-transport_required   status = 422 )
       ( code = zif_abapgit_mcp_sync=>c_error-no_modifiable_task   status = 422 )
       ( code = zif_abapgit_mcp_sync=>c_error-requirements_not_met status = 422 )
+      ( code = zif_abapgit_mcp_sync=>c_error-repo_write_protected status = 422 )
       ( code = zif_abapgit_mcp_sync=>c_error-remote_changed       status = 409 )
       ( code = zif_abapgit_mcp_sync=>c_error-git_error            status = 424 )
       ( code = zif_abapgit_mcp_sync=>c_error-bad_request          status = 400 )

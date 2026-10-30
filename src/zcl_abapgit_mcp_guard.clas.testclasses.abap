@@ -412,3 +412,42 @@ CLASS ltcl_transport_rule IMPLEMENTATION.
   ENDMETHOD.
 
 ENDCLASS.
+
+
+CLASS ltcl_write_protect DEFINITION FINAL FOR TESTING
+  DURATION SHORT
+  RISK LEVEL HARMLESS.
+
+  PRIVATE SECTION.
+    METHODS protected_is_refused  FOR TESTING.
+    METHODS unprotected_passes    FOR TESTING.
+ENDCLASS.
+
+
+CLASS ltcl_write_protect IMPLEMENTATION.
+
+  METHOD protected_is_refused.
+    DATA lx_error TYPE REF TO zcx_abapgit_mcp_sync.
+
+    TRY.
+        zcl_abapgit_mcp_guard=>refuse_write_protected( abap_true ).
+      CATCH zcx_abapgit_mcp_sync INTO lx_error.
+    ENDTRY.
+
+    cl_abap_unit_assert=>assert_bound( lx_error ).
+    cl_abap_unit_assert=>assert_equals( exp = zif_abapgit_mcp_sync=>c_error-repo_write_protected
+                                        act = lx_error->mv_code ).
+    cl_abap_unit_assert=>assert_equals( exp = 422
+                                        act = lx_error->http_status( ) ).
+  ENDMETHOD.
+
+
+  METHOD unprotected_passes.
+    TRY.
+        zcl_abapgit_mcp_guard=>refuse_write_protected( abap_false ).
+      CATCH zcx_abapgit_mcp_sync.
+        cl_abap_unit_assert=>fail( `an unprotected repository must pass` ).
+    ENDTRY.
+  ENDMETHOD.
+
+ENDCLASS.
