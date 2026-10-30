@@ -247,22 +247,30 @@ FORM restore_branch USING iv_reason TYPE string.
     " Everything goes into the message: an error message in START-OF-SELECTION
     " ends the report and discards the list, so a WRITE would never be seen.
     " The status bar shows about 73 characters, so the essential part comes
-    " first: what failed, then the error of the pull (the restore error itself
-    " does not fit), then the branch it was on. Four fields of 50 characters:
-    "   Branch restore failed: <original error> branch was <previous branch>
+    " first: what failed and the branch it was on, then the error of the pull
+    " (the restore error itself does not fit). Four fields of 50 characters:
+    "   Branch restore failed: was <previous branch>; <original error>
     " or, when only the commit pin could not be set again:
-    "   Pin restore failed: <original error> branch was <previous branch>
+    "   Pin restore failed: was <previous branch>; <original error>
     DATA(lv_f1) = COND string( WHEN lv_failed = zcl_abapgit_mcp_branch=>c_restore_failed-pin
                                THEN `Pin restore failed:`
                                ELSE `Branch restore failed:` ).
-    DATA(lv_cause_text) = iv_reason.
-    DATA(lv_f2) = substring( val = lv_cause_text len = nmin( val1 = strlen( lv_cause_text ) val2 = 50 ) ).
-    DATA(lv_f3) = ``.
-    IF strlen( lv_cause_text ) > 50.
-      lv_f3 = substring( val = lv_cause_text off = 50 len = nmin( val1 = strlen( lv_cause_text ) - 50 val2 = 50 ) ).
+    DATA(lv_f2) = |was { gv_prev_branch };|.
+    lv_f2 = substring( val = lv_f2 len = nmin( val1 = strlen( lv_f2 ) val2 = 50 ) ).
+    DATA(lv_len) = strlen( iv_reason ).
+    DATA(lv_cut) = nmin( val1 = lv_len val2 = 50 ).
+    IF lv_len > 50.
+      " cut at a blank, so that the join of the fields does not split a word
+      DATA(lv_blank) = find( val = substring( val = iv_reason len = 50 ) sub = ` ` occ = -1 ).
+      IF lv_blank >= 20.
+        lv_cut = lv_blank + 1.
+      ENDIF.
     ENDIF.
-    DATA(lv_f4) = |branch was { gv_prev_branch }|.
-    lv_f4 = substring( val = lv_f4 len = nmin( val1 = strlen( lv_f4 ) val2 = 50 ) ).
+    DATA(lv_f3) = substring( val = iv_reason len = lv_cut ).
+    DATA(lv_f4) = ``.
+    IF lv_len > lv_cut.
+      lv_f4 = substring( val = iv_reason off = lv_cut len = nmin( val1 = lv_len - lv_cut val2 = 50 ) ).
+    ENDIF.
     MESSAGE e398(00) WITH lv_f1 lv_f2 lv_f3 lv_f4.
   ENDIF.
 ENDFORM.

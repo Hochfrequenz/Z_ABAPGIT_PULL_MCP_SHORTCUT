@@ -561,6 +561,13 @@ CLASS ZCL_ABAPGIT_MCP_SYNC IMPLEMENTATION.
                             ii_log   = li_log ).
           CATCH zcx_abapgit_mcp_sync INTO lx_sync.
         ENDTRY.
+      CATCH cx_root INTO DATA(lx_other).
+        " cx_sy_* from the abapGit calls: same restore below, answered as INTERNAL
+        TRY.
+            raise_internal( ix_error = lx_other
+                            ii_log   = li_log ).
+          CATCH zcx_abapgit_mcp_sync INTO lx_sync.
+        ENDTRY.
     ENDTRY.
 
     IF lx_sync IS BOUND.
@@ -573,9 +580,10 @@ CLASS ZCL_ABAPGIT_MCP_SYNC IMPLEMENTATION.
           DATA(lv_note) = COND string( WHEN lv_failed = zcl_abapgit_mcp_branch=>c_restore_failed-pin
                                        THEN |Pin restore failed: branch { lv_prev_branch } is selected again, the commit pin is lost|
                                        ELSE |Branch restore failed: the repository is still on { lo_repo->get_selected_branch( ) }, it was on { lv_prev_branch }| ).
-          zcx_abapgit_mcp_sync=>raise( iv_code    = lx_sync->mv_code
-                                       iv_text    = lx_sync->mv_text
-                                       it_details = VALUE #( BASE lx_sync->mt_details ( lv_note ) ) ).
+          zcx_abapgit_mcp_sync=>raise( iv_code     = lx_sync->mv_code
+                                       iv_text     = lx_sync->mv_text
+                                       it_details  = VALUE #( BASE lx_sync->mt_details ( lv_note ) )
+                                       ix_previous = lx_sync ).
         ENDIF.
       ENDIF.
       RAISE EXCEPTION lx_sync.

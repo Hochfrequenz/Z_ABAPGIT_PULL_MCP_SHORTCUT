@@ -157,10 +157,10 @@ The ADT endpoint answers `BAD_REQUEST` (HTTP 400) for them, before it looks up t
 
 **The switch lasts only if the pull succeeds.**
 After a successful pull the repository stays on the branch, like after a branch switch in the abapGit UI.
-A successful pull with `P_BRANCH` also clears a commit pin (selecting a branch always does), even when the branch is the one already selected.
+If the repository is pinned to a commit, a successful pull with `P_BRANCH` clears the pin (selecting a branch always does), even when the branch is the one already selected. A repository that is not pinned is not affected.
 The switch happens before the transport, task and deserialize checks, which depend on it.
 If one of them fails, or the pull itself fails, the report puts the repository back on the branch it had before, and on the commit it was pinned to, if any.
-If that restore fails too, the repository is still on the new branch. The message names what failed and the error of the pull, as far as the four message fields of 50 characters allow (about 100 characters; the error of the restore itself is not shown), then the branch it was on: `Branch restore failed: <original error> branch was <previous branch>`. If the branch is back and only pinning the commit again failed, it starts with `Pin restore failed:` instead. An error message ends the report and discards the list, so nothing is written to it.
+If that restore fails too, the repository is still on the new branch. The message names what failed and the error of the pull, as far as the four message fields of 50 characters allow (about 100 characters; the error of the restore itself is not shown), then the branch it was on: `Branch restore failed: was <previous branch>; <original error>`. If the branch is back and only pinning the commit again failed, it starts with `Pin restore failed:` instead. An error message ends the report and discards the list, so nothing is written to it.
 The restore only resets the branch pointer (and the pin): if the failed pull had already written objects, their local objects and checksums stay as the new branch left them, so abapGit may show differences afterwards.
 The ADT endpoint restores in the same way on every error it answers after the switch (`TRANSPORT_REQUIRED`, `REQUIREMENTS_NOT_MET`, undecidable file states, `INTERNAL`, ...). Only `needs_confirmation` keeps the switch, so that the confirmed call pulls the same branch. If its restore fails, the error keeps its code and gets a detail line `Branch restore failed: ...` or `Pin restore failed: ...`.
 
