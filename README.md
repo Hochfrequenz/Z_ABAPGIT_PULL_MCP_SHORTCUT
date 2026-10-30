@@ -159,7 +159,7 @@ The ADT endpoint answers `BAD_REQUEST` (HTTP 400) for them.
 After a successful pull the repository stays on the branch, like after a branch switch in the abapGit UI.
 The switch happens before the transport, task and deserialize checks, which depend on it.
 If one of them fails, or the pull itself fails, the report puts the repository back on the branch it had before, and on the commit it was pinned to, if any.
-If that restore fails too, the message is `Branch restore failed: <previous branch> (see log)` and the list line `Branch restore failed: <previous branch> Cause: <original error>` carries the full cause: the repository is then still on the new branch.
+If that restore fails too, the repository is still on the new branch, and the message says so and carries the original error (an error message ends the report and discards the list, so nothing is written to it): `Branch restore failed: branch=<previous branch> cause=<original error>`. The four message fields are cut at 50 characters each, so a long cause is shortened to about 100 characters.
 The restore only resets the branch pointer (and the pin): if the failed pull had already written objects, their local objects and checksums stay as the new branch left them, so abapGit may show differences afterwards.
 The ADT endpoint does not restore (a pull that needs confirmation keeps the switch, so that the confirmed call pulls the same branch).
 

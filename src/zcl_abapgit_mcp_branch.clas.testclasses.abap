@@ -86,6 +86,8 @@ CLASS ltcl_branch DEFINITION FINAL FOR TESTING
     METHODS restore_without_branch      FOR TESTING RAISING zcx_abapgit_exception.
     METHODS restore_commit_fail_flagged FOR TESTING RAISING zcx_abapgit_exception.
     METHODS restore_same_branch_new_pin FOR TESTING RAISING zcx_abapgit_exception.
+    METHODS pin_switch_fail_restores    FOR TESTING RAISING zcx_abapgit_exception.
+    METHODS pin_switch_restore_fails    FOR TESTING RAISING zcx_abapgit_exception.
 ENDCLASS.
 
 
@@ -341,6 +343,48 @@ CLASS ltcl_branch IMPLEMENTATION.
                                                                           iv_commit  = lc_commit ) ).
     cl_abap_unit_assert=>assert_equals( exp = lc_commit act = lo_double->mv_commit ).
     cl_abap_unit_assert=>assert_equals( exp = 1 act = lo_double->mv_commit_calls ).
+  ENDMETHOD.
+
+  METHOD pin_switch_fail_restores.
+    " Case 9 of the report: pinned to a commit on main, switch to dev, the pull
+    " fails afterwards, the report restores branch and pin as it remembered them.
+    DATA(lc_commit) = `0123456789abcdef0123456789abcdef01234567`.
+    DATA(lo_double) = NEW ltcl_gateway_double( ).
+    lo_double->mv_selected = `refs/heads/main`.
+    lo_double->mv_commit = lc_commit.
+    lo_double->mt_remote = VALUE #( ( `refs/heads/main` ) ( `refs/heads/dev` ) ).
+    DATA(lv_prev_branch) = lo_double->zif_abapgit_mcp_branch_gw~selected_branch( ).
+    DATA(lv_prev_commit) = lo_double->zif_abapgit_mcp_branch_gw~selected_commit( ).
+
+    cl_abap_unit_assert=>assert_true( zcl_abapgit_mcp_branch=>select_in( ii_gateway = lo_double
+                                                                         iv_branch  = `dev` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `refs/heads/dev` act = lo_double->mv_selected ).
+    cl_abap_unit_assert=>assert_initial( lo_double->mv_commit ).
+
+    cl_abap_unit_assert=>assert_true( zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
+                                                                          iv_branch  = lv_prev_branch
+                                                                          iv_commit  = lv_prev_commit ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `refs/heads/main` act = lo_double->mv_selected ).
+    cl_abap_unit_assert=>assert_equals( exp = lc_commit act = lo_double->mv_commit ).
+  ENDMETHOD.
+
+
+  METHOD pin_switch_restore_fails.
+    " Same, but the restore fails: flagged (the report then says so in its
+    " message), the repository stays on the new branch, nothing is raised.
+    DATA(lc_commit) = `0123456789abcdef0123456789abcdef01234567`.
+    DATA(lo_double) = NEW ltcl_gateway_double( ).
+    lo_double->mv_selected = `refs/heads/main`.
+    lo_double->mv_commit = lc_commit.
+    lo_double->mt_remote = VALUE #( ( `refs/heads/main` ) ( `refs/heads/dev` ) ).
+
+    cl_abap_unit_assert=>assert_true( zcl_abapgit_mcp_branch=>select_in( ii_gateway = lo_double
+                                                                         iv_branch  = `dev` ) ).
+    lo_double->mv_fail_select = abap_true.
+    cl_abap_unit_assert=>assert_false( zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
+                                                                           iv_branch  = `refs/heads/main`
+                                                                           iv_commit  = lc_commit ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `refs/heads/dev` act = lo_double->mv_selected ).
   ENDMETHOD.
 
 ENDCLASS.

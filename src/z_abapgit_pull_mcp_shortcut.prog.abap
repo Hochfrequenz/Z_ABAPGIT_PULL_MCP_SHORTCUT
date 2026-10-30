@@ -232,7 +232,7 @@ START-OF-SELECTION.
 *& is there already. Never raises: the failure that made it run is what
 *& gets reported - except when the restore itself fails: then the repository
 *& is left on the new branch, which matters more, and the message says so
-*& and names the original cause. (An information message would open a popup
+*& and names the original cause, all in the message text. (An information message would open a popup
 *& that blocks an unattended consumer.)
 *&---------------------------------------------------------------------*
 FORM restore_branch USING iv_reason TYPE string.
@@ -243,8 +243,18 @@ FORM restore_branch USING iv_reason TYPE string.
   IF zcl_abapgit_mcp_branch=>restore( io_repo   = lo_repo
                                       iv_branch = gv_prev_branch
                                       iv_commit = gv_prev_commit ) = abap_false.
-    " MESSAGE fields are cut at 50 characters, so the full cause goes to the list
-    WRITE: / |Branch restore failed: { gv_prev_branch } Cause: { iv_reason }|.
-    MESSAGE e398(00) WITH 'Branch restore failed:' gv_prev_branch '(see log)' ''.
+    " Everything goes into the message: an error message in START-OF-SELECTION
+    " ends the report and discards the list, so a WRITE would never be seen.
+    " The four fields are cut at 50 characters each and joined by blanks:
+    "   Branch restore failed: <previous branch> cause=<original error>
+    DATA(lv_f2) = |branch={ gv_prev_branch }|.
+    DATA(lv_cause_text) = |cause={ iv_reason }|.
+    DATA(lv_f3) = substring( val = lv_cause_text len = nmin( val1 = strlen( lv_cause_text ) val2 = 50 ) ).
+    DATA(lv_f4) = ``.
+    IF strlen( lv_cause_text ) > 50.
+      lv_f4 = substring( val = lv_cause_text off = 50 len = nmin( val1 = strlen( lv_cause_text ) - 50 val2 = 50 ) ).
+    ENDIF.
+    lv_f2 = substring( val = lv_f2 len = nmin( val1 = strlen( lv_f2 ) val2 = 50 ) ).
+    MESSAGE e398(00) WITH 'Branch restore failed:' lv_f2 lv_f3 lv_f4.
   ENDIF.
 ENDFORM.
