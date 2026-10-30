@@ -240,21 +240,29 @@ FORM restore_branch USING iv_reason TYPE string.
     RETURN.
   ENDIF.
   gv_switched = abap_false.
-  IF zcl_abapgit_mcp_branch=>restore( io_repo   = lo_repo
-                                      iv_branch = gv_prev_branch
-                                      iv_commit = gv_prev_commit ) = abap_false.
+  DATA(lv_failed) = zcl_abapgit_mcp_branch=>restore( io_repo   = lo_repo
+                                                     iv_branch = gv_prev_branch
+                                                     iv_commit = gv_prev_commit ).
+  IF lv_failed IS NOT INITIAL.
     " Everything goes into the message: an error message in START-OF-SELECTION
     " ends the report and discards the list, so a WRITE would never be seen.
-    " The four fields are cut at 50 characters each and joined by blanks:
-    "   Branch restore failed: <previous branch> cause=<original error>
-    DATA(lv_f2) = |branch={ gv_prev_branch }|.
-    DATA(lv_cause_text) = |cause={ iv_reason }|.
-    DATA(lv_f3) = substring( val = lv_cause_text len = nmin( val1 = strlen( lv_cause_text ) val2 = 50 ) ).
-    DATA(lv_f4) = ``.
+    " The status bar shows about 73 characters, so the essential part comes
+    " first: what failed, then the error of the pull (the restore error itself
+    " does not fit), then the branch it was on. Four fields of 50 characters:
+    "   Branch restore failed: <original error> branch was <previous branch>
+    " or, when only the commit pin could not be set again:
+    "   Pin restore failed: <original error> branch was <previous branch>
+    DATA(lv_f1) = COND string( WHEN lv_failed = zcl_abapgit_mcp_branch=>c_restore_failed-pin
+                               THEN `Pin restore failed:`
+                               ELSE `Branch restore failed:` ).
+    DATA(lv_cause_text) = iv_reason.
+    DATA(lv_f2) = substring( val = lv_cause_text len = nmin( val1 = strlen( lv_cause_text ) val2 = 50 ) ).
+    DATA(lv_f3) = ``.
     IF strlen( lv_cause_text ) > 50.
-      lv_f4 = substring( val = lv_cause_text off = 50 len = nmin( val1 = strlen( lv_cause_text ) - 50 val2 = 50 ) ).
+      lv_f3 = substring( val = lv_cause_text off = 50 len = nmin( val1 = strlen( lv_cause_text ) - 50 val2 = 50 ) ).
     ENDIF.
-    lv_f2 = substring( val = lv_f2 len = nmin( val1 = strlen( lv_f2 ) val2 = 50 ) ).
-    MESSAGE e398(00) WITH 'Branch restore failed:' lv_f2 lv_f3 lv_f4.
+    DATA(lv_f4) = |branch was { gv_prev_branch }|.
+    lv_f4 = substring( val = lv_f4 len = nmin( val1 = strlen( lv_f4 ) val2 = 50 ) ).
+    MESSAGE e398(00) WITH lv_f1 lv_f2 lv_f3 lv_f4.
   ENDIF.
 ENDFORM.

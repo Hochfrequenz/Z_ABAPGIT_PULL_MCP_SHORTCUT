@@ -467,6 +467,10 @@ CLASS ZCL_ABAPGIT_MCP_SYNC IMPLEMENTATION.
   METHOD pull.
 
     DATA li_log TYPE REF TO zif_abapgit_log.
+    DATA lx_sync TYPE REF TO zcx_abapgit_mcp_sync.
+    DATA lv_switched TYPE abap_bool.
+    DATA lv_prev_branch TYPE string.
+    DATA lv_prev_commit TYPE string.
 
     IF is_request-repo IS INITIAL.
       zcx_abapgit_mcp_sync=>raise( iv_code = zif_abapgit_mcp_sync=>c_error-bad_request
@@ -477,6 +481,13 @@ CLASS ZCL_ABAPGIT_MCP_SYNC IMPLEMENTATION.
       zcx_abapgit_mcp_sync=>raise( iv_code = zif_abapgit_mcp_sync=>c_error-bad_request
                                    iv_text = `Every "confirm" entry needs "obj_type", "obj_name" and "action"` ).
     ENDLOOP.
+
+    " Before any lookup or remote call: an invalid branch is the caller's mistake
+    DATA(lv_branch_error) = zcl_abapgit_mcp_branch=>check( is_request-branch ).
+    IF lv_branch_error IS NOT INITIAL.
+      zcx_abapgit_mcp_sync=>raise( iv_code = zif_abapgit_mcp_sync=>c_error-bad_request
+                                   iv_text = lv_branch_error ).
+    ENDIF.
 
     DATA(lo_repo) = resolve_repo( is_request-repo ).
     rs_result-repo = VALUE #( name    = lo_repo->get_name( )
@@ -489,11 +500,14 @@ CLASS ZCL_ABAPGIT_MCP_SYNC IMPLEMENTATION.
 
     TRY.
         " Persistent, like a switch in the abapGit UI: the repository stays on the branch.
-        " An unknown branch changes nothing.
-        DATA(lv_branch_error) = zcl_abapgit_mcp_branch=>check( is_request-branch ).
-        IF lv_branch_error IS NOT INITIAL.
-          zcx_abapgit_mcp_sync=>raise( iv_code = zif_abapgit_mcp_sync=>c_error-bad_request
-                                       iv_text = lv_branch_error ).
+        " An unknown branch changes nothing. The previous branch and pin are
+        " remembered first: every error exit below puts the repository back, only
+        " needs_confirmation keeps the switch, so that the confirmed call pulls the
+        " same branch.
+        IF is_request-branch IS NOT INITIAL.
+          lv_prev_branch = lo_repo->get_selected_branch( ).
+          lv_prev_commit = lo_repo->get_selected_commit( ).
+          lv_switched    = abap_true.
         ENDIF.
         IF is_request-branch IS NOT INITIAL
            AND zcl_abapgit_mcp_branch=>select( io_repo   = lo_repo
@@ -539,10 +553,33 @@ CLASS ZCL_ABAPGIT_MCP_SYNC IMPLEMENTATION.
 
         rs_result-status = zif_abapgit_mcp_sync=>c_status-pulled.
         rs_result-log    = log_entries( li_log ).
+      CATCH zcx_abapgit_mcp_sync INTO lx_sync.
+        " handled below, after the restore
       CATCH zcx_abapgit_exception INTO DATA(lx_error).
-        raise_internal( ix_error = lx_error
-                        ii_log   = li_log ).
+        TRY.
+            raise_internal( ix_error = lx_error
+                            ii_log   = li_log ).
+          CATCH zcx_abapgit_mcp_sync INTO lx_sync.
+        ENDTRY.
     ENDTRY.
+
+    IF lx_sync IS BOUND.
+      IF lv_switched = abap_true.
+        DATA(lv_failed) = zcl_abapgit_mcp_branch=>restore( io_repo   = lo_repo
+                                                           iv_branch = lv_prev_branch
+                                                           iv_commit = lv_prev_commit ).
+        IF lv_failed IS NOT INITIAL.
+          " The repository is left on the new branch (or unpinned): say so, keep the code
+          DATA(lv_note) = COND string( WHEN lv_failed = zcl_abapgit_mcp_branch=>c_restore_failed-pin
+                                       THEN |Pin restore failed: branch { lv_prev_branch } is selected again, the commit pin is lost|
+                                       ELSE |Branch restore failed: the repository is still on { lo_repo->get_selected_branch( ) }, it was on { lv_prev_branch }| ).
+          zcx_abapgit_mcp_sync=>raise( iv_code    = lx_sync->mv_code
+                                       iv_text    = lx_sync->mv_text
+                                       it_details = VALUE #( BASE lx_sync->mt_details ( lv_note ) ) ).
+        ENDIF.
+      ENDIF.
+      RAISE EXCEPTION lx_sync.
+    ENDIF.
 
   ENDMETHOD.
 

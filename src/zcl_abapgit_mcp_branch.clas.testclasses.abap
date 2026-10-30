@@ -78,6 +78,8 @@ CLASS ltcl_branch DEFINITION FINAL FOR TESTING
     METHODS leading_slash_is_refused    FOR TESTING.
     METHODS bare_prefix_is_refused      FOR TESTING.
     METHODS valid_values_pass_check     FOR TESTING.
+    METHODS semicolon_is_refused        FOR TESTING.
+    METHODS blanks_inside_are_refused   FOR TESTING.
     METHODS invalid_branch_is_raised    FOR TESTING.
     METHODS restore_selects_previous    FOR TESTING RAISING zcx_abapgit_exception.
     METHODS restore_pins_commit_again   FOR TESTING RAISING zcx_abapgit_exception.
@@ -233,6 +235,19 @@ CLASS ltcl_branch IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD semicolon_is_refused.
+    " The OK-code parameter parser of the report splits on ;
+    cl_abap_unit_assert=>assert_not_initial( zcl_abapgit_mcp_branch=>check( `main;P_TRKORR=X` ) ).
+    cl_abap_unit_assert=>assert_not_initial( zcl_abapgit_mcp_branch=>check( `a;b` ) ).
+  ENDMETHOD.
+
+
+  METHOD blanks_inside_are_refused.
+    cl_abap_unit_assert=>assert_not_initial( zcl_abapgit_mcp_branch=>check( `my branch` ) ).
+    cl_abap_unit_assert=>assert_not_initial( zcl_abapgit_mcp_branch=>check( |a{ cl_abap_char_utilities=>horizontal_tab }b| ) ).
+  ENDMETHOD.
+
+
   METHOD valid_values_pass_check.
     " Empty and blanks mean: do not switch, which is not an error
     cl_abap_unit_assert=>assert_initial( zcl_abapgit_mcp_branch=>check( `` ) ).
@@ -265,7 +280,7 @@ CLASS ltcl_branch IMPLEMENTATION.
     DATA(lo_double) = NEW ltcl_gateway_double( ).
     lo_double->mv_selected = `refs/heads/feature/x`.
 
-    cl_abap_unit_assert=>assert_true( zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
+    cl_abap_unit_assert=>assert_initial( zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
                                                                           iv_branch  = `refs/heads/main` ) ).
     cl_abap_unit_assert=>assert_equals( exp = `refs/heads/main` act = lo_double->mv_selected ).
     cl_abap_unit_assert=>assert_equals( exp = 0 act = lo_double->mv_commit_calls ).
@@ -278,7 +293,7 @@ CLASS ltcl_branch IMPLEMENTATION.
     DATA(lo_double) = NEW ltcl_gateway_double( ).
     lo_double->mv_selected = `refs/heads/feature/x`.
 
-    cl_abap_unit_assert=>assert_true( zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
+    cl_abap_unit_assert=>assert_initial( zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
                                                                           iv_branch  = `refs/heads/main`
                                                                           iv_commit  = lc_commit ) ).
     cl_abap_unit_assert=>assert_equals( exp = `refs/heads/main` act = lo_double->mv_selected ).
@@ -290,7 +305,7 @@ CLASS ltcl_branch IMPLEMENTATION.
     DATA(lo_double) = NEW ltcl_gateway_double( ).
     lo_double->mv_selected = `refs/heads/main`.
 
-    cl_abap_unit_assert=>assert_true( zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
+    cl_abap_unit_assert=>assert_initial( zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
                                                                           iv_branch  = `refs/heads/main` ) ).
     cl_abap_unit_assert=>assert_equals( exp = 0 act = lo_double->mv_select_calls ).
     cl_abap_unit_assert=>assert_equals( exp = 0 act = lo_double->mv_commit_calls ).
@@ -303,8 +318,9 @@ CLASS ltcl_branch IMPLEMENTATION.
     lo_double->mv_selected = `refs/heads/feature/x`.
     lo_double->mv_fail_select = abap_true.
 
-    cl_abap_unit_assert=>assert_false( zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
-                                                                           iv_branch  = `refs/heads/main` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = zcl_abapgit_mcp_branch=>c_restore_failed-branch
+                                        act = zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
+                                                                                  iv_branch  = `refs/heads/main` ) ).
   ENDMETHOD.
 
 
@@ -313,7 +329,7 @@ CLASS ltcl_branch IMPLEMENTATION.
     DATA(lo_double) = NEW ltcl_gateway_double( ).
     lo_double->mv_selected = `refs/heads/feature/x`.
 
-    cl_abap_unit_assert=>assert_true( zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
+    cl_abap_unit_assert=>assert_initial( zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
                                                                           iv_branch  = `` ) ).
     cl_abap_unit_assert=>assert_equals( exp = 0 act = lo_double->mv_select_calls ).
   ENDMETHOD.
@@ -324,10 +340,13 @@ CLASS ltcl_branch IMPLEMENTATION.
     lo_double->mv_selected = `refs/heads/feature/x`.
     lo_double->mv_fail_commit = abap_true.
 
-    cl_abap_unit_assert=>assert_false(
-      zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
-                                          iv_branch  = `refs/heads/main`
-                                          iv_commit  = `0123456789abcdef0123456789abcdef01234567` ) ).
+    " The branch is back, only the pin is not: told apart from a failed branch restore
+    cl_abap_unit_assert=>assert_equals(
+      exp = zcl_abapgit_mcp_branch=>c_restore_failed-pin
+      act = zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
+                                                iv_branch  = `refs/heads/main`
+                                                iv_commit  = `0123456789abcdef0123456789abcdef01234567` ) ).
+    cl_abap_unit_assert=>assert_equals( exp = `refs/heads/main` act = lo_double->mv_selected ).
     cl_abap_unit_assert=>assert_equals( exp = 0 act = lo_double->mv_commit_calls ).
   ENDMETHOD.
 
@@ -338,7 +357,7 @@ CLASS ltcl_branch IMPLEMENTATION.
     DATA(lo_double) = NEW ltcl_gateway_double( ).
     lo_double->mv_selected = `refs/heads/main`.
 
-    cl_abap_unit_assert=>assert_true( zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
+    cl_abap_unit_assert=>assert_initial( zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
                                                                           iv_branch  = `refs/heads/main`
                                                                           iv_commit  = lc_commit ) ).
     cl_abap_unit_assert=>assert_equals( exp = lc_commit act = lo_double->mv_commit ).
@@ -361,7 +380,7 @@ CLASS ltcl_branch IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals( exp = `refs/heads/dev` act = lo_double->mv_selected ).
     cl_abap_unit_assert=>assert_initial( lo_double->mv_commit ).
 
-    cl_abap_unit_assert=>assert_true( zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
+    cl_abap_unit_assert=>assert_initial( zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
                                                                           iv_branch  = lv_prev_branch
                                                                           iv_commit  = lv_prev_commit ) ).
     cl_abap_unit_assert=>assert_equals( exp = `refs/heads/main` act = lo_double->mv_selected ).
@@ -381,9 +400,10 @@ CLASS ltcl_branch IMPLEMENTATION.
     cl_abap_unit_assert=>assert_true( zcl_abapgit_mcp_branch=>select_in( ii_gateway = lo_double
                                                                          iv_branch  = `dev` ) ).
     lo_double->mv_fail_select = abap_true.
-    cl_abap_unit_assert=>assert_false( zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
-                                                                           iv_branch  = `refs/heads/main`
-                                                                           iv_commit  = lc_commit ) ).
+    cl_abap_unit_assert=>assert_equals( exp = zcl_abapgit_mcp_branch=>c_restore_failed-branch
+                                        act = zcl_abapgit_mcp_branch=>restore_in( ii_gateway = lo_double
+                                                                                  iv_branch  = `refs/heads/main`
+                                                                                  iv_commit  = lc_commit ) ).
     cl_abap_unit_assert=>assert_equals( exp = `refs/heads/dev` act = lo_double->mv_selected ).
   ENDMETHOD.
 

@@ -39,7 +39,8 @@ CLASS zcl_abapgit_mcp_branch DEFINITION
 
     "! Reason why a branch value is refused, empty when it is fine (an empty value
     "! is fine: it means do not switch). Refused: HEAD, a leading slash, refs/ values
-    "! other than refs/heads/ and refs/heads/ without a name.
+    "! other than refs/heads/, refs/heads/ without a name, and blanks or semicolons
+    "! (the OK-code parameter parser of the report splits on them).
     CLASS-METHODS check
       IMPORTING
         iv_branch       TYPE csequence
@@ -48,26 +49,28 @@ CLASS zcl_abapgit_mcp_branch DEFINITION
 
     "! Puts a repository back on a branch and commit remembered before SELECT.
     "! Does nothing when it is there already. Never raises, so it cannot hide the
-    "! error that made the caller restore: abap_false means the restore failed.
+    "! error that made the caller restore. Empty result: restored. c_restore_failed-branch:
+    "! the branch could not be selected. c_restore_failed-pin: the branch is back, but
+    "! pinning the commit again failed.
     "! @parameter io_repo | online repository
     "! @parameter iv_branch | full branch name from before the switch
     "! @parameter iv_commit | commit pin from before the switch, initial if none
     CLASS-METHODS restore
       IMPORTING
-        io_repo      TYPE REF TO zcl_abapgit_repo_online
-        iv_branch    TYPE csequence
-        iv_commit    TYPE csequence OPTIONAL
+        io_repo   TYPE REF TO zcl_abapgit_repo_online
+        iv_branch TYPE csequence
+        iv_commit TYPE csequence OPTIONAL
       RETURNING
-        VALUE(rv_ok) TYPE abap_bool.
+        VALUE(rv_failed) TYPE string.
 
     "! Same as RESTORE, for any implementation of the seam
     CLASS-METHODS restore_in
       IMPORTING
-        ii_gateway   TYPE REF TO zif_abapgit_mcp_branch_gw
-        iv_branch    TYPE csequence
-        iv_commit    TYPE csequence OPTIONAL
+        ii_gateway TYPE REF TO zif_abapgit_mcp_branch_gw
+        iv_branch  TYPE csequence
+        iv_commit  TYPE csequence OPTIONAL
       RETURNING
-        VALUE(rv_ok) TYPE abap_bool.
+        VALUE(rv_failed) TYPE string.
 
     "! Same as SELECT, for any implementation of the seam
     CLASS-METHODS select_in
@@ -78,6 +81,12 @@ CLASS zcl_abapgit_mcp_branch DEFINITION
         VALUE(rv_found) TYPE abap_bool
       RAISING
         zcx_abapgit_exception.
+
+    CONSTANTS:
+      BEGIN OF c_restore_failed,
+        branch TYPE string VALUE `BRANCH`,
+        pin    TYPE string VALUE `PIN`,
+      END OF c_restore_failed.
 
   PRIVATE SECTION.
 
@@ -108,7 +117,9 @@ CLASS zcl_abapgit_mcp_branch IMPLEMENTATION.
     IF lv_branch IS INITIAL.
       RETURN.
     ENDIF.
-    IF lv_branch = `HEAD`.
+    IF contains( val = lv_branch regex = `[\s;]` ).
+      rv_error = `Invalid branch: must not contain blanks or semicolons`.
+    ELSEIF lv_branch = `HEAD`.
       rv_error = `Invalid branch: HEAD is not a branch name`.
     ELSEIF lv_branch(1) = `/`.
       rv_error = `Invalid branch: must not start with /`.
@@ -124,9 +135,9 @@ CLASS zcl_abapgit_mcp_branch IMPLEMENTATION.
 
   METHOD restore.
 
-    rv_ok = restore_in( ii_gateway = NEW lcl_abapgit_gateway( io_repo )
-                        iv_branch  = iv_branch
-                        iv_commit  = iv_commit ).
+    rv_failed = restore_in( ii_gateway = NEW lcl_abapgit_gateway( io_repo )
+                            iv_branch  = iv_branch
+                            iv_commit  = iv_commit ).
 
   ENDMETHOD.
 
@@ -134,23 +145,22 @@ CLASS zcl_abapgit_mcp_branch IMPLEMENTATION.
   METHOD restore_in.
 
     IF iv_branch IS INITIAL.
-      rv_ok = abap_true.
       RETURN.
     ENDIF.
+    DATA(lv_stage) = c_restore_failed-branch.
     TRY.
         IF ii_gateway->selected_branch( ) = iv_branch
            AND ii_gateway->selected_commit( ) = iv_commit.
-          rv_ok = abap_true.
           RETURN.
         ENDIF.
         " select_branch clears a pin, so the commit is pinned again afterwards
         ii_gateway->select_branch( CONV #( iv_branch ) ).
         IF iv_commit IS NOT INITIAL.
+          lv_stage = c_restore_failed-pin.
           ii_gateway->select_commit( CONV #( iv_commit ) ).
         ENDIF.
-        rv_ok = abap_true.
       CATCH zcx_abapgit_exception.
-        rv_ok = abap_false.
+        rv_failed = lv_stage.
     ENDTRY.
 
   ENDMETHOD.
