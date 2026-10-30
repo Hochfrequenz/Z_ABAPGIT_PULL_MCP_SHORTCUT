@@ -41,6 +41,12 @@
     </item>
     <item>
      <ID>S</ID>
+     <KEY>P_KEY</KEY>
+     <ENTRY>Repository Key</ENTRY>
+     <LENGTH>22</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
      <KEY>P_REPO</KEY>
      <ENTRY>Repository Name</ENTRY>
      <LENGTH>23</LENGTH>

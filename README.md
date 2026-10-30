@@ -70,15 +70,18 @@ Pulls (deserializes) a Git repository into SAP via the abapGit API.
 | Parameter  | Required | Description                                      |
 | ---------------------------- | ------------------------------------------------------------ |
 | `P_ACTION` | No       | `PULL` (default)                                  |
-| `P_REPO`   | Yes      | Exact repository name or URL (case-insensitive)   |
+| `P_REPO`   | Yes*     | Exact repository name or URL (case-insensitive)   |
+| `P_KEY`    | Yes*     | abapGit repository key, digits only (see "Pulling by key") |
 | `P_BRANCH` | No       | Branch to switch the repository to before the pull; kept only if the pull succeeds |
 | `P_TRKORR` | If req.  | Transport request (required if system enforces it) |
 | `P_USER`   | No       | GitHub username (for private repos)                |
 | `P_TOKEN`  | No       | GitHub PAT (for private repos)                     |
 
+\* Exactly one of `P_REPO` and `P_KEY` is required.
+
 **What it does:**
 
-1. Finds the repository by an **exact** match on its name or its URL
+1. Finds the repository by an **exact** match on its name or its URL, or by its key (`P_KEY`)
 2. Sets GitHub credentials if provided (for private repo authentication)
 3. If `P_BRANCH` is given and differs from the selected branch: checks the value, checks that the branch exists on the remote and selects it (see below)
 4. Runs `deserialize_checks()` to get required confirmations
@@ -121,7 +124,37 @@ commonly is.
 ```
 /nZ_ABAPGIT_PULL_MCP P_REPO=MY_REPO; P_TRKORR=DEVK900123;
 /nZ_ABAPGIT_PULL_MCP P_REPO=MY_REPO; P_BRANCH=feature/x; P_TRKORR=DEVK900123;
+/nZ_ABAPGIT_PULL_MCP P_KEY=000000000012; P_TRKORR=DEVK900123;
 ```
+
+#### Pulling by key (`P_KEY`)
+
+Name and URL do not identify an abapGit repository uniquely; the 12-digit repository key does (it is the 8th field of the `LIST` output).
+`P_KEY` binds exactly that repository, so the report never has to guess.
+It is a separate parameter on purpose: a numeric `P_REPO` would be ambiguous (a repository name can be all digits).
+`P_KEY` is a string, not a `c(12)` field, so a too long value is rejected instead of silently cut to its first 12 digits.
+
+The value is trimmed, must consist of digits only and be at most 12 characters, and is then padded with zeros on the left to 12 (`12` becomes `000000000012`).
+Anything else (`abc`, 13 digits, blanks inside the value) is refused and nothing is changed:
+
+```
+Invalid P_KEY: <value> (digits only, max 12)
+```
+
+(A value longer than 13 characters is shortened to 10 characters and `...` in this message, so that the hint fits in the message field.)
+
+`P_REPO` and `P_KEY` exclude each other. Exactly one must be given:
+
+| Input | Message |
+| ----- | ------- |
+| both, even if they agree | `Use either P_REPO or P_KEY, not both` |
+| neither | `P_REPO or P_KEY is required for PULL action` |
+| key without a (online) repository | `Repository not found: key <value> (online only)` (the value is the padded key) |
+
+Like `P_REPO`, `P_KEY` searches **online repositories only**, so the key of an offline repository reports "not found".
+There is no ambiguity case for a key.
+After the repository is bound, everything is as for `P_REPO`: credentials, `P_BRANCH` (including the restore on failure), the transport check, the pull, and the success message `Pull successful: <name>`.
+Pulling by name or URL is unchanged.
 
 #### Pulling another branch (`P_BRANCH`)
 
