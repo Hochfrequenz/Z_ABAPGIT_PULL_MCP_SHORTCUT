@@ -117,13 +117,12 @@ CLASS ZCL_ABAPGIT_MCP_REPO_MATCH IMPLEMENTATION.
   METHOD find_online_repo_by_key.
 
     DATA lt_candidates TYPE ty_candidates.
-    DATA lt_repos      TYPE STANDARD TABLE OF REF TO zcl_abapgit_repo WITH EMPTY KEY.
 
     " Same online-only semantics as find_online_repos.
-    LOOP AT zcl_abapgit_repo_srv=>get_instance( )->list( iv_offline = abap_false ) INTO DATA(li_repo).
+    DATA(lt_repos) = zcl_abapgit_repo_srv=>get_instance( )->list( iv_offline = abap_false ).
+    LOOP AT lt_repos INTO DATA(li_repo).
       APPEND VALUE #( key     = li_repo->ms_data-key
                       offline = li_repo->is_offline( ) ) TO lt_candidates.
-      APPEND li_repo TO lt_repos.
     ENDLOOP.
 
     DATA(lt_index) = select_by_key( it_candidates = lt_candidates
