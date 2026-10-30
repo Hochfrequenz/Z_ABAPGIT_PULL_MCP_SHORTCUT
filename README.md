@@ -139,7 +139,7 @@ Anything else (`abc`, 13 digits, blanks inside the value) is refused and nothing
 Invalid P_KEY: <value> (digits only, max 12)
 ```
 
-(A value longer than 14 characters is shortened to 11 characters and `...` in this message, so that the hint fits in the message field.)
+(A value longer than 14 characters is shortened to 10 characters and `...` in this message, so that the hint fits in the message field.)
 
 `P_REPO` and `P_KEY` exclude each other. Exactly one must be given:
 

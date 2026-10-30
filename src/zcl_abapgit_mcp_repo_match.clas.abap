@@ -175,7 +175,7 @@ CLASS ZCL_ABAPGIT_MCP_REPO_MATCH IMPLEMENTATION.
       " The value is cut to keep the whole text within one message field
       " (50 characters), so the hint after it stays readable.
       IF strlen( lv_key ) > 14.
-        lv_key = |{ substring( val = lv_key len = 11 ) }...|.
+        lv_key = |{ substring( val = lv_key len = 10 ) }...|.
       ENDIF.
       rv_error = |Invalid P_KEY: { lv_key } (digits only, max 12)|.
     ENDIF.

@@ -104,7 +104,7 @@ CLASS ltcl_repo_match IMPLEMENTATION.
       act = zcl_abapgit_mcp_repo_match=>check_selector( iv_repo = `` iv_key = `12 34` ) ).
     " a long value is cut, the hint stays
     cl_abap_unit_assert=>assert_equals(
-      exp = `Invalid P_KEY: 12345678901... (digits only, max 12)`
+      exp = `Invalid P_KEY: 1234567890... (digits only, max 12)`
       act = zcl_abapgit_mcp_repo_match=>check_selector( iv_repo = `` iv_key = `1234567890123456789` ) ).
   ENDMETHOD.
 
