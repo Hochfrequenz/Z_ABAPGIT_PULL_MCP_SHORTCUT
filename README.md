@@ -190,7 +190,7 @@ Lists all registered abapGit repositories with metadata.
 **Output format:** Tilde-delimited lines via `WRITE`. The **first** line is a
 header carrying the repository count; every following line is one repository:
 ```
-TOTAL~53~~~~~~
+TOTAL~2~~~~~~
 REPO_NAME~https://github.com/org/repo~$PACKAGE~refs/heads/main~20260225120000.0000000~DEVELOPER~~000000000012
 ```
 
@@ -213,9 +213,14 @@ count reads field 2 of the line whose field 1 is `TOTAL`.
 
 **Extensibility:** fields may be appended in future versions; readers must ignore
 unknown trailing fields. Fields 1-7 do not change. A reader written for the
-earlier seven fields keeps working. Because the key is the last field, a row
-clipped at the window width cuts it first: accept it only if it is exactly 12
-digits.
+earlier seven fields keeps working. Advice for readers: the key is the last
+field, so a row clipped at the window width cuts it first; treat a key as valid
+only if it is exactly 12 digits, and otherwise as absent. Do not assume every
+reader does this check.
+
+**Limitation:** a `~` inside a free-text field (the URL, or the name of an offline
+repository) shifts all later fields. This is not new with the key. Branch and
+package names cannot contain `~`.
 
 **Compare the header against the number of rows you actually parsed.** This is
 a classic SAP list and it is paged: a consumer that reads only the visible page
