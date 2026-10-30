@@ -190,15 +190,32 @@ Lists all registered abapGit repositories with metadata.
 **Output format:** Tilde-delimited lines via `WRITE`. The **first** line is a
 header carrying the repository count; every following line is one repository:
 ```
-TOTAL~53~~~~~
-REPO_NAME~https://github.com/org/repo~$PACKAGE~refs/heads/main~20260225120000.0000000~DEVELOPER~
+TOTAL~53~~~~~~
+REPO_NAME~https://github.com/org/repo~$PACKAGE~refs/heads/main~20260225120000.0000000~DEVELOPER~~000000000012
 ```
 
-Fields: `name~url~package~branch~last_pull_at~last_pull_by~offline_flag`
+Fields: `name~url~package~branch~last_pull_at~last_pull_by~offline_flag~key`
 
-The header is padded to the same seven fields, so a consumer that splits every
-line blindly is unaffected; one that wants the count reads field 2 of the line
-whose field 1 is `TOTAL`.
+| # | Field | Notes |
+| - | ----- | ----- |
+| 1 | `name` | |
+| 2 | `url` | empty for an offline repository |
+| 3 | `package` | |
+| 4 | `branch` | |
+| 5 | `last_pull_at` | empty if never pulled |
+| 6 | `last_pull_by` | empty if never pulled |
+| 7 | `offline_flag` | `X` for an offline repository, otherwise empty; always present |
+| 8 | `key` | abapGit repository key (12 digits, e.g. `000000000012`), the only unique identifier: name and URL are not unique in abapGit. Always present, for online and offline repositories. Never contains `~` |
+
+The header is padded to the same eight fields (`TOTAL~<n>` plus six tildes), so a
+consumer that splits every line blindly gets the same width; one that wants the
+count reads field 2 of the line whose field 1 is `TOTAL`.
+
+**Extensibility:** fields may be appended in future versions; readers must ignore
+unknown trailing fields. Fields 1-7 do not change. A reader written for the
+earlier seven fields keeps working. Because the key is the last field, a row
+clipped at the window width cuts it first: accept it only if it is exactly 12
+digits.
 
 **Compare the header against the number of rows you actually parsed.** This is
 a classic SAP list and it is paged: a consumer that reads only the visible page
