@@ -18,8 +18,9 @@ ENDCLASS.
 CLASS ltcl_list_fmt IMPLEMENTATION.
 
   METHOD count_fields.
-    SPLIT iv_line AT '~' INTO TABLE DATA(lt_fields).
-    rv_count = lines( lt_fields ).
+    " Count the delimiters rather than SPLIT: SPLIT is not reliable about trailing
+    " empty fields, which is exactly what is under test.
+    rv_count = count( val = iv_line sub = '~' ) + 1.
   ENDMETHOD.
 
   METHOD header_three_repos.
