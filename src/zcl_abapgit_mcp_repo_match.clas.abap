@@ -127,6 +127,9 @@ CLASS ZCL_ABAPGIT_MCP_REPO_MATCH IMPLEMENTATION.
 
     DATA(lt_index) = select_by_key( it_candidates = lt_candidates
                                     iv_key        = iv_key ).
+    " A key is unique, so more than one hit cannot happen. If it does (a
+    " corrupt repository list), bind nothing rather than guess: the caller
+    " reports "not found" and the pull never starts.
     IF lines( lt_index ) = 1.
       TRY.
           ro_repo ?= lt_repos[ lt_index[ 1 ] ].
@@ -165,16 +168,18 @@ CLASS ZCL_ABAPGIT_MCP_REPO_MATCH IMPLEMENTATION.
 
   METHOD check_selector.
 
-    DATA(lv_key) = condense( CONV string( iv_key ) ).
+    DATA(lv_key)  = condense( CONV string( iv_key ) ).
+    DATA(lv_norm) = normalise_key( lv_key ).
 
     IF iv_repo IS NOT INITIAL AND lv_key IS NOT INITIAL.
       rv_error = `Use either P_REPO or P_KEY, not both`.
     ELSEIF iv_repo IS INITIAL AND lv_key IS INITIAL.
       rv_error = `P_REPO or P_KEY is required for PULL action`.
-    ELSEIF lv_key IS NOT INITIAL AND normalise_key( lv_key ) IS INITIAL.
+    ELSEIF lv_key IS NOT INITIAL AND lv_norm IS INITIAL.
       " The value is cut to keep the whole text within one message field
-      " (50 characters), so the hint after it stays readable.
-      IF strlen( lv_key ) > 14.
+      " (50 characters), so the hint after it stays readable:
+      " 15 (prefix) + 13 (value) + 22 (hint) = 50.
+      IF strlen( lv_key ) > 13.
         lv_key = |{ substring( val = lv_key len = 10 ) }...|.
       ENDIF.
       rv_error = |Invalid P_KEY: { lv_key } (digits only, max 12)|.

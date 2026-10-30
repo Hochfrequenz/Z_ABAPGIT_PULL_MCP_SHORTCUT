@@ -16,6 +16,9 @@ CLASS ltcl_repo_match DEFINITION FINAL FOR TESTING
     METHODS select_miss FOR TESTING.
     METHODS select_offline_excl FOR TESTING.
     METHODS select_no_partial FOR TESTING.
+    METHODS select_online_wins_dup FOR TESTING.
+    METHODS invalid_key_14_chars FOR TESTING.
+    METHODS unknown_key_unbound FOR TESTING RAISING zcx_abapgit_exception.
 ENDCLASS.
 
 
@@ -138,6 +141,34 @@ CLASS ltcl_repo_match IMPLEMENTATION.
       ( key = `000000000002` offline = abap_false ) ).
     cl_abap_unit_assert=>assert_initial(
       zcl_abapgit_mcp_repo_match=>select_by_key( it_candidates = lt_candidates iv_key = `000000000001` ) ).
+  ENDMETHOD.
+
+
+  METHOD select_online_wins_dup.
+    " an offline and an online candidate with the same key: only the online one
+    DATA(lt_candidates) = VALUE zcl_abapgit_mcp_repo_match=>ty_candidates(
+      ( key = `000000000007` offline = abap_true )
+      ( key = `000000000007` offline = abap_false ) ).
+    cl_abap_unit_assert=>assert_equals(
+      exp = VALUE zcl_abapgit_mcp_repo_match=>ty_indexes( ( 2 ) )
+      act = zcl_abapgit_mcp_repo_match=>select_by_key( it_candidates = lt_candidates iv_key = `000000000007` ) ).
+  ENDMETHOD.
+
+
+  METHOD invalid_key_14_chars.
+    " 13 characters are shown in full, from 14 on the value is cut to 10 + ...
+    cl_abap_unit_assert=>assert_equals(
+      exp = `Invalid P_KEY: 1234567890... (digits only, max 12)`
+      act = zcl_abapgit_mcp_repo_match=>check_selector( iv_repo = `` iv_key = `12345678901234` ) ).
+    cl_abap_unit_assert=>assert_equals(
+      exp = 50
+      act = strlen( zcl_abapgit_mcp_repo_match=>check_selector( iv_repo = `` iv_key = `12345678901234` ) ) ).
+  ENDMETHOD.
+
+
+  METHOD unknown_key_unbound.
+    cl_abap_unit_assert=>assert_not_bound(
+      zcl_abapgit_mcp_repo_match=>find_online_repo_by_key( `999999999999` ) ).
   ENDMETHOD.
 
 

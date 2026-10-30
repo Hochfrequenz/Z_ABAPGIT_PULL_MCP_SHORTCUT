@@ -70,12 +70,14 @@ Pulls (deserializes) a Git repository into SAP via the abapGit API.
 | Parameter  | Required | Description                                      |
 | ---------------------------- | ------------------------------------------------------------ |
 | `P_ACTION` | No       | `PULL` (default)                                  |
-| `P_REPO`   | One of `P_REPO` / `P_KEY` | Exact repository name or URL (case-insensitive)   |
-| `P_KEY`    | One of `P_REPO` / `P_KEY` | abapGit repository key, digits only (see "Pulling by key") |
+| `P_REPO`   | Yes*     | Exact repository name or URL (case-insensitive)   |
+| `P_KEY`    | Yes*     | abapGit repository key, digits only (see "Pulling by key") |
 | `P_BRANCH` | No       | Branch to switch the repository to before the pull; kept only if the pull succeeds |
 | `P_TRKORR` | If req.  | Transport request (required if system enforces it) |
 | `P_USER`   | No       | GitHub username (for private repos)                |
 | `P_TOKEN`  | No       | GitHub PAT (for private repos)                     |
+
+\* Exactly one of `P_REPO` and `P_KEY` is required.
 
 **What it does:**
 
@@ -139,7 +141,7 @@ Anything else (`abc`, 13 digits, blanks inside the value) is refused and nothing
 Invalid P_KEY: <value> (digits only, max 12)
 ```
 
-(A value longer than 14 characters is shortened to 10 characters and `...` in this message, so that the hint fits in the message field.)
+(A value longer than 13 characters is shortened to 10 characters and `...` in this message, so that the hint fits in the message field.)
 
 `P_REPO` and `P_KEY` exclude each other. Exactly one must be given:
 
