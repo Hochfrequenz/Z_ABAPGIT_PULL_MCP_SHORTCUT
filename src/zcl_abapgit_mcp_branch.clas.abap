@@ -57,18 +57,18 @@ CLASS zcl_abapgit_mcp_branch DEFINITION
     "! @parameter iv_commit | commit pin from before the switch, initial if none
     CLASS-METHODS restore
       IMPORTING
-        io_repo   TYPE REF TO zcl_abapgit_repo_online
-        iv_branch TYPE csequence
-        iv_commit TYPE csequence OPTIONAL
+        io_repo          TYPE REF TO zcl_abapgit_repo_online
+        iv_branch        TYPE csequence
+        iv_commit        TYPE csequence OPTIONAL
       RETURNING
         VALUE(rv_failed) TYPE string.
 
     "! Same as RESTORE, for any implementation of the seam
     CLASS-METHODS restore_in
       IMPORTING
-        ii_gateway TYPE REF TO zif_abapgit_mcp_branch_gw
-        iv_branch  TYPE csequence
-        iv_commit  TYPE csequence OPTIONAL
+        ii_gateway       TYPE REF TO zif_abapgit_mcp_branch_gw
+        iv_branch        TYPE csequence
+        iv_commit        TYPE csequence OPTIONAL
       RETURNING
         VALUE(rv_failed) TYPE string.
 
