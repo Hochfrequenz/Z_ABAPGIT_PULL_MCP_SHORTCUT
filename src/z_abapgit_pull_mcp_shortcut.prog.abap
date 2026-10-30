@@ -47,30 +47,31 @@ START-OF-SELECTION.
         " be there to detect. As a header it is always visible, and the
         " consumer can compare it against the number of rows it parsed.
         "
-        " Padded to seven fields so it is NOT a breaking change: a
-        " consumer that splits every line into seven still gets seven,
-        " and one that looks for a header still finds TOTAL in field 1.
-        " The five trailing tildes are cheaper than a deployment order
-        " constraint between this report and its reader.
+        " Padded to the same eight fields as a repository line (see
+        " ZCL_ABAPGIT_MCP_LIST_FMT), so a consumer that splits every line
+        " blindly gets the same width, and one that looks for a header still
+        " finds TOTAL in field 1. Fields may be appended; readers ignore
+        " unknown trailing fields.
         DATA(lt_repos) = zcl_abapgit_repo_srv=>get_instance( )->list( ).
-        WRITE: / |TOTAL~{ lines( lt_repos ) }~~~~~|.
+        WRITE: / zcl_abapgit_mcp_list_fmt=>header( lines( lt_repos ) ).
 
         LOOP AT lt_repos INTO DATA(li_repo_list).
           DATA(lv_offline) = li_repo_list->is_offline( ).
-          DATA(lv_offline_flag) = COND string( WHEN lv_offline = abap_true THEN 'X' ELSE '' ).
           DATA(lv_url) = COND string( WHEN lv_offline = abap_false
                                       THEN CAST zcl_abapgit_repo_online( li_repo_list )->get_url( )
                                       ELSE '' ).
           DATA(lv_ts) = COND string( WHEN li_repo_list->ms_data-deserialized_at IS NOT INITIAL
                                      THEN |{ li_repo_list->ms_data-deserialized_at }|
                                      ELSE '' ).
-          DATA(lv_line) = li_repo_list->get_name( ) && '~' &&
-                          lv_url && '~' &&
-                          li_repo_list->get_package( ) && '~' &&
-                          li_repo_list->ms_data-branch_name && '~' &&
-                          lv_ts && '~' &&
-                          li_repo_list->ms_data-deserialized_by && '~' &&
-                          lv_offline_flag.
+          DATA(lv_line) = zcl_abapgit_mcp_list_fmt=>repo_line(
+                            iv_name            = li_repo_list->get_name( )
+                            iv_url             = lv_url
+                            iv_package         = li_repo_list->get_package( )
+                            iv_branch          = li_repo_list->ms_data-branch_name
+                            iv_deserialized_at = lv_ts
+                            iv_deserialized_by = li_repo_list->ms_data-deserialized_by
+                            iv_offline         = lv_offline
+                            iv_key             = li_repo_list->ms_data-key ).
           WRITE: / lv_line.
         ENDLOOP.
 
